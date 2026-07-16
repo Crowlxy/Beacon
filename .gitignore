@@ -1,0 +1,57 @@
+# Build output
+bin/
+obj/
+artifacts/
+Output/
+publish/
+TestResults/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# Logs and local data
+*.log
+Data/
+UserData/
+portable.flag
+
+# Distribution
+*.zip
+*.msix
+*.msixbundle
+*.appinstaller
+*.cer
+*.pfx
+
+# Secrets
+.env
+.env.*
+!.env.example
+secrets.json
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary
+*.tmp
+*.bak
+*.swp
+~$*
