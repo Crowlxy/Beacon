@@ -14,11 +14,17 @@
 
 ---
 
+## 2026-07-16: 既定サンドボックスのcodex execがR0監査で何も実行できなかった
+
+- 事象: `codex exec --model gpt-5.6-sol`（既定サンドボックス）が、本リポジトリへの書き込み・Beacon-oldのディレクトリ列挙/grep/ビルドのすべてを `CreateProcessWithLogonW failed: 5` で拒否され、Phase R0が変更ゼロで終了した。
+- 原因: CodexのWindowsサンドボックスが補助プロセス起動を拒否する既知事象（Beacon-old側LESSONSに同種記録あり）。加えて作業リポジトリ外のBeacon-oldはworkspaceに含まれない。
+- 再発防止: **この環境ではヘッドレスの `codex exec` を使わない**（2026-07-16 ユーザー指示）。CodexはユーザーがCodex側の環境で対話実行し、プロンプトはPROMPTS.mdから渡す。実行後に `git -C <Beacon-old> status` で無変更を検証する。PROMPTS.md冒頭の運用欄に反映済み。
+
 ## 2026-07-16: ローカルのフォルダ名とリポジトリ実体の不一致で誤push寸前だった
 
 - 事象: `C:\Users\ha.takaku\Desktop\Project\Beacon`（旧WPF版チェックアウト）のoriginが、リポジトリ分離後の新 `Crowlxy/Beacon.git` を指したままだった。
 - 原因: GitHub側でBeacon→Beacon-oldへ分離した際、ローカルのremote URLが未更新だった。
-- 再発防止: originを `Beacon-old.git` へ修正済み。ローカル配置（旧=`...\Project\Beacon`、新=`...\Project\Beacon-winui`）をPLAN.md/PROMPTS.mdに明記し、push前に `git remote -v` を確認する。
+- 再発防止: originを `Beacon-old.git` へ修正済み。ローカルフォルダ名もリポジトリ名と一致させた（新=`...\Project\Beacon`、旧=`...\Project\Beacon-old`。2026-07-16リネーム）。push前に `git remote -v` を確認する。
 
 ## 2026-07-16: 旧WPF計画（Beacon-old docs/spotlight/）をWinUI再構築へ方針転換
 

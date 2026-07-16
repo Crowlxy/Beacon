@@ -5,8 +5,8 @@
 **Codexプロンプトは先に作り切らない**: 現時点で存在するのはR0とR1のみ（[PROMPTS.md](PROMPTS.md)）。各Gate通過後にClaudeが次を作成する。
 
 ローカル環境の前提（2026-07-16時点）:
-- 本リポジトリ（Crowlxy/Beacon）: `C:\Users\ha.takaku\Desktop\Project\Beacon-winui`
-- Beacon-oldのチェックアウト: `C:\Users\ha.takaku\Desktop\Project\Beacon`（**フォルダ名はBeaconだが中身はBeacon-old**。読み取り専用の参照元として扱う）
+- 本リポジトリ（Crowlxy/Beacon）: `C:\Users\ha.takaku\Desktop\Project\Beacon`
+- Beacon-oldのチェックアウト: `C:\Users\ha.takaku\Desktop\Project\Beacon-old`（読み取り専用の参照元として扱う）
 
 | Phase | 内容 | Gate |
 |---|---|---|

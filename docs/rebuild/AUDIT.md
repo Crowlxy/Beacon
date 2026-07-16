@@ -2,7 +2,7 @@
 
 本書は**A部=Beacon-oldで確認した事実**（実コードを読んで確認したもの）と、**B部=新Beaconに採用済みの構成**（本リポジトリの決定）を明確に分ける。「未確認」はPhase R0でCodexが埋める。推測で埋めない。
 
-調査対象のBeacon-oldローカルチェックアウト: `C:\Users\ha.takaku\Desktop\Project\Beacon`（フォルダ名はBeaconだが中身はBeacon-old。origin修正済み）
+調査対象のBeacon-oldローカルチェックアウト: `C:\Users\ha.takaku\Desktop\Project\Beacon-old`
 
 ---
 

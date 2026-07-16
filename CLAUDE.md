@@ -1,6 +1,6 @@
 # Beacon — WinUI 3 Portable-firstランチャー（独立リポジトリ）
 
-新Beacon本体。旧WPF版（Flow Launcherフォーク）は `Crowlxy/Beacon-old` にあり、**移植元・比較参照のみ**（Project Reference / Submodule接続禁止）。ローカル配置: 本リポジトリ=`C:\Users\ha.takaku\Desktop\Project\Beacon-winui`、Beacon-old=`C:\Users\ha.takaku\Desktop\Project\Beacon`（フォルダ名に注意）。
+新Beacon本体。旧WPF版（Flow Launcherフォーク）は `Crowlxy/Beacon-old` にあり、**移植元・比較参照のみ**（Project Reference / Submodule接続禁止）。ローカル配置: 本リポジトリ=`C:\Users\ha.takaku\Desktop\Project\Beacon`、Beacon-old=`C:\Users\ha.takaku\Desktop\Project\Beacon-old`。
 
 ## 役割分担
 - **Claude**: 仕様策定・アーキテクチャ・フェーズ計画・Codexプロンプト作成・Gateレビュー（コードの実装はしない）。承認済みの製品方針を黙って変えない

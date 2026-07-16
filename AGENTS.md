@@ -5,8 +5,8 @@
 タスクは `docs/rebuild/PROMPTS.md` のフェーズ単位で与えられる。
 
 ## リポジトリ配置（間違えないこと）
-- 本リポジトリ（作業対象）: `C:\Users\ha.takaku\Desktop\Project\Beacon-winui`（Crowlxy/Beacon、統合先は`main`）
-- Beacon-old（読み取り専用の移植元）: `C:\Users\ha.takaku\Desktop\Project\Beacon`（**フォルダ名はBeaconだが中身は旧WPF版**。変更・コミット禁止）
+- 本リポジトリ（作業対象）: `C:\Users\ha.takaku\Desktop\Project\Beacon`（Crowlxy/Beacon、統合先は`main`）
+- Beacon-old（読み取り専用の移植元）: `C:\Users\ha.takaku\Desktop\Project\Beacon-old`（旧WPF版。変更・コミット禁止）
 
 ## 必須制約
 
