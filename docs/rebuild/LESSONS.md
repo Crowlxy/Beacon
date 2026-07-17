@@ -30,6 +30,18 @@
 
 ---
 
+## 2026-07-17: 別プロセスからの同一ログファイルappendで行破損
+
+- 事象: セカンダリインスタンスの診断ログをプライマリと同じbeacon.logへ書いたところ、プライマリの`displayed the AppWindow`行が`Window`だけの破損行になり、スモークのマーカー判定が失敗した。
+- 原因: .NETの`FileMode.Append`はオープン時にend-of-fileへシークするだけでアトミックappendではなく、複数プロセスの同時書き込みで互いの行を上書きする。
+- 再発防止: 1ログファイルにつき書き込みプロセスは1つに限定する。セカンダリはbeacon-secondary.logへ分離（反映済み）。プロセス間で共有するログが必要になったら、その時点でappendの原子性を保証する方式を設計する。
+
+## 2026-07-17: スモークの持ち越しログ誤マッチでMutex獲得レース
+
+- 事象: GitHub Actions windows-latest（run 29561124234）で `Test-Portable.ps1 -UseActivationPipe` がsmoke-b段階の「Second Beacon.Next instance did not exit within 15 seconds.」で失敗。ローカル再現でも同一失敗。
+- 原因: フォルダ移動でsmoke-aのbeacon.logがsmoke-bへ持ち越され、smoke-bの登録待ちが古いマーカーへ即マッチ。1本目のMutex獲得前にactivationインスタンスが起動し、レースに勝ったactivation側がプライマリとして常駐した。ログ蓄積型のマーカー待ちは「今回の起動分」だけを見ないと成立しない。
+- 再発防止: Test-Beaconがフェーズ開始時に持ち越しログを削除（削除前に artifacts\logs\ へ保全、スクリプトへ反映済み）。セカンダリパスの `Secondary instance signaled=` ログとフェーズ別タイムスタンプ出力を恒久的な診断手段として維持。今後、ログ出現待ちで進行判定するテストは、フェーズ跨ぎでログを初期化するか出現位置（オフセット）で判定する。
+
 ## 2026-07-17: WPF RuntimePack除去で参照アセンブリまで無効化
 
 - 再発: 2026-07-17（`DisableTransitiveFrameworkReferenceDownloads` は未導入RuntimePackの取得抑止であり、導入済みSDK環境のコピーは継続した。診断ログの推測パス検索も0件で終了。続く複数ファイルパッチは2ファイル目の更新ヘッダー欠落で拒否されたため、binlogで確認済みのitem名と明示的なファイル境界へ切替）

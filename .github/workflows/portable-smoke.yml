@@ -26,5 +26,6 @@ jobs:
           name: portable-smoke-diagnostics
           if-no-files-found: warn
           path: |
-            artifacts/smoke-*/Beacon/Data/Logs/beacon.log
+            artifacts/smoke-*/Beacon/Data/Logs/*.log
+            artifacts/logs/**
             artifacts/portable-dlls.txt

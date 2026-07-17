@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 
@@ -28,7 +29,9 @@ internal static class Program
         Instance = SingleInstanceCoordinator.TryAcquire();
         if (Instance is null)
         {
-            return SingleInstanceCoordinator.SignalExistingAsync().GetAwaiter().GetResult() ? 0 : 3;
+            var signaled = SingleInstanceCoordinator.SignalExistingAsync().GetAwaiter().GetResult();
+            WriteSecondaryInstanceLog(signaled);
+            return signaled ? 0 : 3;
         }
 
         using (Instance)
@@ -45,5 +48,27 @@ internal static class Program
         }
 
         return 0;
+    }
+
+    private static void WriteSecondaryInstanceLog(bool signaled)
+    {
+        try
+        {
+            var resolution = DataRootResolver.Resolve(
+                AppContext.BaseDirectory,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+            // beacon.log はプライマリが書く。FileMode.Append はアトミックでないため
+            // 別プロセスから同一ファイルへ書くと行が破損する（LESSONS 2026-07-17）
+            var path = Path.Combine(resolution.Path, "Logs", "beacon-secondary.log");
+            using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+            writer.WriteLine($"{DateTimeOffset.Now:O} INFO Secondary instance signaled={signaled}, exiting");
+        }
+        catch (DataRootResolutionException)
+        {
+        }
+        catch (IOException)
+        {
+        }
     }
 }

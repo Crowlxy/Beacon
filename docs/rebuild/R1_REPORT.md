@@ -45,3 +45,10 @@ CI成功判定のログマーカーは Hotkey and tray registered、Hotkey or ac
 ## 残リスク
 
 Gate A承認前に、GitHub Actionsのクリーン環境スモーク、トレイメニューの手動操作、更新差し替え・ロールバック、旧WPF版との並行起動を確認する。
+
+## CI失敗と対処（2026-07-17 / run 29561124234）
+
+- 事象: windows-latest上の `Test-Portable.ps1 -UseActivationPipe` がsmoke-b段階で「Second Beacon.Next instance did not exit within 15 seconds.」で失敗。
+- 根本原因（**確定・ローカル再現で診断ログにより特定**）: Test-Portable.ps1のスクリプト欠陥。smoke-aのDataフォルダをMove-Itemでsmoke-bへ移すため、beacon.logに前フェーズのマーカーが残存し、smoke-bの「Hotkey and tray registered」待ちが**起動途中の新プロセスを待たずに古いログへ即マッチ**していた。その結果activationインスタンスが1本目のMutex獲得前に起動し、**Mutex獲得レース**でactivation側がプライマリになって常駐→WaitForExit(15000)満了。コールドスタートが遅いCIで顕在化しやすく、ローカルでも再現した。アプリ側の終了処理には問題なし（当初仮説のブートストラップ終了ハングは反証済み）。
+- 対処: Test-Beaconが各フェーズ開始時に持ち越しbeacon.logを削除してから起動する。削除前のログは `artifacts\logs\<phase>-beacon.log` へ保全し、CIのartifactへ含める。
+- 診断可能化（恒久化）: セカンダリパスが `Secondary instance signaled=<bool>, exiting` をbeacon.logへ記録。Test-Portable.ps1が各フェーズの進行をタイムスタンプ付きで標準出力へ出し、activationタイムアウト時に `HasExited` を出力する。
