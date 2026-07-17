@@ -9,7 +9,7 @@
 | 項目 | 結果 | 根拠・注記 |
 |---|---|---|
 | Unpackaged + Self-contained publish | 成功 | Build-Portable.ps1 完走 |
-| ZIP展開後の直接起動 | ローカル成功 / クリーン環境未実施 | Test-Portable.ps1 完走。GitHub Actions windows-latest（Server系）での確認はpush後に実施 |
+| ZIP展開後の直接起動 | 成功（クリーン環境含む） | ローカルとGitHub Actions windows-latest（WinAppSDK Runtime未導入）双方でTest-Portable.ps1完走。CI: run 29562716968（2026-07-17） |
 | 非表示起動からホットキー表示 | 成功 | 通常スモークで表示ログを確認 |
 | トレイ表示・表示/終了 | 実装済み / 手動操作未実施 | 登録ログとスモーク終了時のプロセス停止を確認。コンテキストメニュー操作は未実施 |
 | 単一インスタンス | 成功 | -UseActivationPipeで2本目が終了コード0、1本目の表示を確認 |
@@ -44,7 +44,7 @@ CI成功判定のログマーカーは Hotkey and tray registered、Hotkey or ac
 
 ## 残リスク
 
-Gate A承認前に、GitHub Actionsのクリーン環境スモーク、トレイメニューの手動操作、更新差し替え・ロールバック、旧WPF版との並行起動を確認する。
+GitHub Actionsのクリーン環境スモークは成功（run 29562716968）。Gate A承認前に残るのは、トレイメニューの手動操作と旧WPF版との並行起動。更新差し替え・ロールバックの実機確認はGate Dまでに行う。
 
 ## CI失敗と対処（2026-07-17 / run 29561124234）
 
