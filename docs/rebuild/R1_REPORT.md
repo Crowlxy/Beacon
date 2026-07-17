@@ -11,7 +11,7 @@
 | Unpackaged + Self-contained publish | 成功 | Build-Portable.ps1 完走 |
 | ZIP展開後の直接起動 | 成功（クリーン環境含む） | ローカルとGitHub Actions windows-latest（WinAppSDK Runtime未導入）双方でTest-Portable.ps1完走。CI: run 29562716968（2026-07-17） |
 | 非表示起動からホットキー表示 | 成功 | 通常スモークで表示ログを確認 |
-| トレイ表示・表示/終了 | 実装済み / 手動操作未実施 | 登録ログとスモーク終了時のプロセス停止を確認。コンテキストメニュー操作は未実施 |
+| トレイ表示・表示/終了 | 成功 | 2026-07-17 手動確認: トレイメニューから表示・終了とも正常動作 |
 | 単一インスタンス | 成功 | -UseActivationPipeで2本目が終了コード0、1本目の表示を確認 |
 | PluginHost RPC逐次結果・キャンセル | 成功 | 逐次結果2件とキャンセル完了ログを確認 |
 | exe隣接Dataへのログ保存 | 成功 | artifacts/smoke-b/Beacon/Data/Logs/beacon.logを確認 |
@@ -19,7 +19,7 @@
 | 書き込み不能時の明示失敗・無言切替なし | 成功 | NUnitテスト成功 |
 | フォルダ移動後の再起動 | 成功 | smoke-aからsmoke-bへ移動後に再起動成功 |
 | ダミー更新差し替え・ロールバック | 未実施 | 手動手順の実機確認が残る |
-| 旧WPF版との並行起動 | 未実施 | 本検証ではBeacon-oldを起動していない |
+| 旧WPF版との並行起動 | 成功 | 2026-07-17 手動確認: Beacon-oldと同時起動でホットキー競合なし |
 | iNKORE・禁止フォント不在 | 成功 | portable-dlls.txtとソース監査で一致0件 |
 | WPF配布ファイル不在 | 成功 | Presentation系、WindowsBase、System.Windows系、wpfgfx、UIAutomation、ReachFramework、System.Printingの一致0件 |
 | 将来MSIX化 | 阻害要因なし | package identity非依存のWin32ホットキー/トレイとプロセス境界を使用。MSIX固有検証はR11 |
@@ -44,7 +44,11 @@ CI成功判定のログマーカーは Hotkey and tray registered、Hotkey or ac
 
 ## 残リスク
 
-GitHub Actionsのクリーン環境スモークは成功（run 29562716968）。Gate A承認前に残るのは、トレイメニューの手動操作と旧WPF版との並行起動。更新差し替え・ロールバックの実機確認はGate Dまでに行う。
+GitHub Actionsのクリーン環境スモークは成功（run 29562716968）。トレイ手動操作・旧WPF版との並行起動も2026-07-17に確認済み。更新差し替え・ロールバックの実機確認はGate Dまでに行う。
+
+## Gate A判定
+
+**承認（2026-07-17）**。差し戻しB1〜B4はすべて解消し、Portable配布・複数プロセスRPC・ホットキー/トレイの技術成立性を確認した。
 
 ## CI失敗と対処（2026-07-17 / run 29561124234）
 
