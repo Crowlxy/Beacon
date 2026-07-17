@@ -2,9 +2,35 @@
 
 Beacon is an independent project. This file records third-party code and assets that are actually included in Beacon source or release artifacts.
 
-## Current repository state
+## R1 Portable dependencies
 
-The repository currently contains only project documentation and configuration. No Flow Launcher, Wox, Everything, iNKORE, or Windows App SDK binaries or source files have been imported yet.
+The R1 Portable ZIP includes Microsoft Windows App SDK 2.2.0 and the following direct or transitive components:
+
+- Microsoft Windows App SDK packages: Microsoft.WindowsAppSDK 2.2.0, Runtime 2.2.0, WinUI 2.2.1, AI 2.2.3, Base 2.0.4, DWrite 2.1.0, Foundation 2.1.0, InteractiveExperiences 2.0.15, ML 2.1.70, and Widgets 2.0.5.
+- Microsoft Windows ML Runtime: Microsoft.Windows.AI.MachineLearning 2.1.70.
+- Microsoft Windows SDK build packages recorded by the dependency manifest: Microsoft.Windows.SDK.BuildTools 10.0.26100.4654 and Microsoft.Windows.SDK.BuildTools.MSIX 1.7.251221100.
+- Microsoft WebView2 1.0.3719.77.
+- MIT-licensed packages: StreamJsonRpc 2.25.29; MessagePack and MessagePack.Annotations 2.5.302; Microsoft.NET.StringTools 18.4.0; Microsoft.VisualStudio.Threading.Only 17.14.15; Microsoft.VisualStudio.Validation 17.13.22; Nerdbank.MessagePack 1.2.4; Nerdbank.Streams 2.13.16; Newtonsoft.Json 13.0.3; PolyType 1.3.1; System.IO.Pipelines 8.0.0; System.Memory 4.6.3; System.Numerics.Tensors 9.0.0; and System.Runtime.CompilerServices.Unsafe 6.1.2.
+
+Microsoft Windows App SDK is licensed under **MICROSOFT SOFTWARE LICENSE TERMS / MICROSOFT WINDOWS APP SDK**, not MIT. Its NuGet license permits redistribution of files binplaced with an application for both framework-dependent and self-contained deployment, subject to its distribution requirements. Microsoft Windows ML Runtime and Microsoft Windows SDK components are governed by their respective Microsoft Software License Terms.
+
+### MIT License
+
+Copyright holders include Microsoft Corporation, Yoshifumi Kawai and contributors, Andrew Arnott, James Newton-King, and the respective package contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### Microsoft WebView2 license notice
+
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that source redistributions retain the copyright notice, conditions, and disclaimer; binary redistributions reproduce them in documentation or other materials; and Microsoft or contributor names are not used to endorse derived products without prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE.
 
 ## Migration policy
 

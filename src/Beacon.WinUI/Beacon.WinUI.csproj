@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <AssemblyName>Beacon.Next</AssemblyName>
+    <ApplicationIcon />
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Beacon.Contracts\Beacon.Contracts.csproj" />
+    <ProjectReference Include="..\Beacon.PluginHost\Beacon.PluginHost.csproj" ReferenceOutputAssembly="false" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="StreamJsonRpc" Version="2.25.29" />
+  </ItemGroup>
+  <Target Name="CopyXamlBinaryFiles" AfterTargets="Build;Publish">
+    <ItemGroup>
+      <XamlBinaryFile Include="$(IntermediateOutputPath)*.xbf" />
+    </ItemGroup>
+    <Copy SourceFiles="@(XamlBinaryFile)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy
+      Condition="'$(PublishDir)' != ''"
+      SourceFiles="@(XamlBinaryFile)"
+      DestinationFolder="$(PublishDir)"
+      SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="RemoveWindowsDesktopRuntimePack" AfterTargets="ResolveRuntimePackAssets">
+    <ItemGroup>
+      <RuntimePackAsset Remove="@(RuntimePackAsset)" Condition="'%(RuntimePackAsset.NuGetPackageId)' == 'Microsoft.WindowsDesktop.App.Runtime.win-x64'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == 'Microsoft.WindowsDesktop.App.Runtime.win-x64'" />
+    </ItemGroup>
+  </Target>
+</Project>
