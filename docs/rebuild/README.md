@@ -1,37 +1,36 @@
 # Beacon rebuild documentation
 
-This directory is the source of truth for the WinUI 3 portable rebuild.
+本ディレクトリがWinUI 3 Portable再構築の正式ドキュメント（source of truth）。
 
-## Document priority
-
-When documents conflict, use this order:
+## 文書優先順位（矛盾時）
 
 1. `SPEC.md`
-2. Approved ADRs in `adr/`
+2. 承認済みADR（`adr/`）
 3. `ARCHITECTURE.md`
 4. `DISTRIBUTION.md`
 5. `PLAN.md`
-6. Phase implementation prompt
+6. フェーズ実装プロンプト（`PROMPTS.md`）
 
-Report unresolved contradictions instead of choosing silently.
+矛盾は黙って解釈せず報告する。
 
-## Current phase
+## 現在のフェーズ
 
-The repository is being initialized for **Phase R0: audit and rebuild boundary**. No product source project should be generated until the R1 technical-spike decisions are documented and approved.
+**Phase R0（現状監査）実行中。** Beacon.slnおよびソースプロジェクトはR1の技術スパイクまで生成しない。
 
-## Planned documents
+## 文書一覧
 
-- `SPEC.md` — product requirements and non-goals
-- `ARCHITECTURE.md` — project and process boundaries
-- `PLAN.md` — phases R0–R11 and release gates
-- `AUDIT.md` — verified facts from Beacon-old
-- `DEPENDENCY_MAP.md` — legacy dependencies and their destinations
-- `COMPATIBILITY.md` — Flow plugin compatibility tiers
-- `DISTRIBUTION.md` — portable ZIP, DataRoot, update, and optional MSIX
-- `MIGRATION.md` — settings, history, plugin, and data migration
-- `TEST_MATRIX.md` — automated, integration, and release tests
-- `RISK_REGISTER.md` — major risks and mitigations
-- `PROMPTS.md` — approved phase-specific Codex prompts
-- `LESSONS.md` — failed approaches and recurrence prevention
+- `SPEC.md` — 製品要件・非ゴール・承認済み前提
+- `ARCHITECTURE.md` — プロジェクト構成・プロセス境界・移植規則
+- `PLAN.md` — Phase R0〜R11とGate A〜D
+- `AUDIT.md` — A部: Beacon-oldで確認した事実 / B部: 新Beaconに採用済みの構成
+- `DEPENDENCY_MAP.md` — 依存の事実と採否
+- `COMPATIBILITY.md` — Flowプラグイン互換Tier
+- `DISTRIBUTION.md` — Portable ZIP・DataRoot・更新・任意MSIX
+- `MIGRATION.md` — 設定・履歴・プラグインの移行
+- `TEST_MATRIX.md` — 自動・統合・リリーステスト
+- `RISK_REGISTER.md` — 主要リスクと対策
+- `PROMPTS.md` — 承認済みフェーズのCodexプロンプト（現在R0/R1のみ）
+- `LESSONS.md` — 失敗記録簿（作業前必読）
+- `adr/` — アーキテクチャ決定記録（0001境界 / 0002配布 / 0003 PluginHost / 0004 DataRoot）
 
-The corresponding legacy WPF planning documents remain in `Beacon-old` and do not control this repository.
+旧WPF計画の文書は `Crowlxy/Beacon-old` の `docs/spotlight/` にあり、本リポジトリを拘束しない（実装禁止・参照は移植の参考のみ）。

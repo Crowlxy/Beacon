@@ -1,0 +1,31 @@
+name: Portable smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Build portable ZIP
+        shell: pwsh
+        run: ./src/Beacon.Distribution/Build-Portable.ps1
+      - name: Test portable ZIP
+        shell: pwsh
+        run: ./src/Beacon.Distribution/Test-Portable.ps1 -UseActivationPipe
+      - name: Upload smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-smoke-diagnostics
+          if-no-files-found: warn
+          path: |
+            artifacts/smoke-*/Beacon/Data/Logs/*.log
+            artifacts/logs/**
+            artifacts/portable-dlls.txt
