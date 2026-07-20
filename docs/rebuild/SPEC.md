@@ -99,9 +99,67 @@ Beacon-old旧ルールからの継承・廃止:
 
 グローバルホットキー / タスクトレイ / 単一インスタンス / 起動時非表示 / フォーカス制御 / 複数モニター・DPI / AppWindow位置管理 / Shellアイコン / Everything IPC / 管理者権限アプリとの境界 / スタートアップ登録（オプトイン）/ 通知。実装方針は ARCHITECTURE.md §5、ポータビリティ規則は DISTRIBUTION.md。
 
-## 7. Beacon固有UX（Phase R8）
+## 7. Beacon固有UX（統合Phase R5で実装。2026-07-20追補）
 
-Browse Mode（Ctrl+1〜4）/ QueryScope・カテゴリチップ / Actions（多段引数・確認・Quick Keys）/ クリップボード履歴（初期OFF・ローカルのみ・暗号化）/ 個人化ランキング（ローカルのみ・リセット/OFF可）。Beacon-old旧計画の `ACTIONS.md` / `PRIVACY.md` は**製品要件の参考のみ**（WPF向けクラス設計は引き継がない）。Phase R8開始時に新アーキテクチャ向けに本書へ追補する。
+Beacon-old旧計画の `ACTIONS.md` / `PRIVACY.md` / `UI_STATES.md` は**製品要件の参考のみ**（WPF向けクラス設計は引き継がない）。以下が新アーキテクチャの正。状態・アクション・履歴のロジックは `Beacon.Core`、Windows依存（クリップボード監視・キー送信等）は `Beacon.Platform.Windows`、描画のみ `Beacon.WinUI` に置く。プロセス境界（PluginHost）を越える型だけを `Beacon.Contracts` に追加し、追加時は ContractVersion を上げる。
+
+### 7.1 画面状態と遷移
+
+```
+LauncherViewState: Search / Browse / ContextActions / ActionInput / Confirmation / Running
+```
+
+- **Escは常に1段だけ戻る**: Running(キャンセル)→ActionInput→…→Search。Search（未入力）でEscを押すと閉じる
+- 結果パネル表示条件: Search以外の状態、またはSearchで「入力あり かつ 結果>0」
+- `ContextActions`: 選択行で `→` または `Shift+Enter` → その項目に適用できるアクション一覧を同一パネルに表示
+- `Running` 中は再実行をブロック（二重実行禁止）。完了・失敗はサブタイトル行で通知しウィンドウは閉じない（失敗時）
+
+### 7.2 Browse Mode
+
+- `Ctrl+1〜4` = **1: Applications / 2: Files / 3: Actions / 4: Clipboard**。Escで通常検索へ
+- 空欄時の初期表示: Applications=よく使うアプリ（個人化データ順）/ Files=最近のファイル（Windows Recent。Everything全列挙はしない）/ Actions=使用頻度順 / Clipboard=最近のコピー（履歴OFF時は「無効」の案内行を1件だけ表示）
+- モード中の入力はそのカテゴリ内の絞り込みになる
+
+### 7.3 QueryScope・カテゴリチップ
+
+- スラッシュフィルター: `/app` `/file` `/folder` `/action` `/setting` `/clipboard` + 日本語エイリアス（`/アプリ` `/ファイル` `/フォルダ`）
+- Tabで確定すると文字列ではなく **QueryScope構造体**（Core内）として保持し、UIは検索フィールド下のカテゴリチップで表現（トークン: チップ高28/文字12）。Backspace（入力が空のとき）またはチップの×で解除
+- QueryScopeはプロバイダーへの絞り込み条件としてOrchestratorが適用する（各プロバイダーへ文字列を渡して再解釈させない）
+
+### 7.4 Actions・Quick Keys
+
+- Core内モデル（WPF型・デリゲートRPC渡し禁止は従来どおり）:
+  `ActionDescriptor(Id, Title, Glyph, Parameters[], 実行)` / `ActionParameter(Id, Title, Kind=Text|FilePath|FolderPath|Choice, Required)`
+- 状態遷移: `Search → ActionSelected → ParameterInput(多段) → Confirmation → Running → Complete`
+- **破壊的操作（名前変更・移動・削除系）は Confirmation 必須**
+- 内蔵アクション v1（10個）: 開く / 保存場所を表示 / パスをコピー / 管理者として実行 / 名前変更 / コピー / 移動 / ZIP圧縮 / この場所でターミナル / 既定アプリで開く（画像変換・PDF加工・AIは対象外）
+- Quick Keys 既定: `rf`=保存場所を表示 / `cp`=パスをコピー / `rn`=名前変更 / `term`=この場所でターミナル。UIは結果行右端の小さなピルバッジ+検索フィールドのゴースト補完。**編集UIはR9**（R5では既定値固定、定義はDataRoot配下の設定ファイル）
+
+### 7.5 クリップボード履歴
+
+| 項目 | 値 |
+|---|---|
+| 初期状態 | **OFF**（明示的に有効化するまで監視しない。有効化はトレイメニュー） |
+| 対象(v1) | テキスト / URL / ファイル一覧 / HTML（画像は対象外） |
+| 保存期間 / 件数 | 7日 / 最大500 |
+| 保存先 | `<DataRoot>` 配下のみ。クラウド送信なし |
+| 暗号化 | DPAPI `DataProtectionScope.CurrentUser` |
+| 重複 | 内容ハッシュで除外。Beacon自身の貼り付けを再登録しない |
+| 除外 | パスワードマネージャー等の除外フォーマット（`ExcludeClipboardContentFromMonitorProcessing` 等）を尊重 |
+| 操作 | 個別削除 / 全削除（復元不可） / 一時停止。除外アプリ指定のUIはR9（データ形式のみ用意） |
+
+監視は `AddClipboardFormatListener`（Platform.Windows内のサービス。UIコードへ直接埋め込まない）。「AIでパスワードらしさを推測して除外」のような曖昧な保護は採用しない。
+
+### 7.6 個人化ランキング
+
+- 保存する: 結果ID / 選択回数 / 最終選択日時 / 使用時のアクティブプロセス名 / 使用モード
+- 保存しない: 画面キャプチャ / キー入力全文 / ファイル内容 / 一切のクラウド送信
+- §4スコア表の使用履歴項目（24時間+120 / 7日+60 / 選択回数最大+180 / 現在アプリ・フォルダ関連 各+80）の入力源。すべてローカル処理
+- **全リセットと個人化OFFを必須機能とする**（R5ではトレイメニューから。設定画面はR9）
+
+### 7.7 プレビューの新データ契約【対象外 2026-07-20】
+
+第三者プラグイン対応（旧R7 PluginHost）が実装対象外となったため、唯一の消費者を失う本契約も**定義しない**。将来プラグイン対応を再開する場合に、データのみのDTO（Title / Description / ImagePathOrUri / FilePath / Metadata）として設計する方針だけを残す。WPF `PreviewPanel`（Tier 4）非対応・プロセス境界越えのUI型禁止の原則は変わらない。
 
 ## 8. ライセンス方針
 

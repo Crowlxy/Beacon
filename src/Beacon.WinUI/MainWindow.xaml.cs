@@ -1,8 +1,12 @@
 using System.Diagnostics;
 using System.IO.Pipes;
 using Beacon.Contracts;
+using Beacon.Core;
+using Beacon.Platform.Windows;
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 using StreamJsonRpc;
 using Windows.Graphics;
 
@@ -17,8 +21,11 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public MainWindow(string dataRoot)
     {
+        _appSearchProvider = new AppSearchProvider();
+        _orchestrator = new QueryOrchestrator([_appSearchProvider, new FileSearchProvider(R1Storage.WriteLog), new CalculatorSearchProvider(), new UrlSearchProvider(), new WebSearchProvider()]);
         R1Storage.WriteLog("INFO MainWindow initialization started");
         InitializeComponent();
+        ConfigureBackdrop();
         R1Storage.WriteLog("INFO MainWindow XAML initialized");
         _dataRoot = dataRoot;
         var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -28,20 +35,42 @@ public sealed partial class MainWindow : Window, IDisposable
         _appWindow.Closing += OnClosing;
         R1Storage.WriteLog("INFO AppWindow acquired");
         _nativeWindow = new NativeWindowController(windowHandle, ShowLauncher, ExitApplication);
+        InitializeLauncher(windowHandle);
         R1Storage.WriteLog("INFO Hotkey and tray registered");
+    }
+
+    private void ConfigureBackdrop()
+    {
+        if (DesktopAcrylicController.IsSupported())
+        {
+            try
+            {
+                SystemBackdrop = new ThinDesktopAcrylicBackdrop();
+                R1Storage.WriteLog("INFO Backdrop path: thin desktop acrylic");
+                return;
+            }
+            catch (Exception exception)
+            {
+                R1Storage.WriteLog($"WARN Thin desktop acrylic unavailable: {exception.Message}");
+            }
+        }
+
+        try
+        {
+            SystemBackdrop = new DesktopAcrylicBackdrop();
+            R1Storage.WriteLog("INFO Backdrop path: standard desktop acrylic fallback");
+        }
+        catch (Exception exception)
+        {
+            SystemBackdrop = null;
+            Panel.Background = (Brush)Application.Current.Resources["LauncherFallbackBrush"];
+            R1Storage.WriteLog($"WARN Backdrop path: solid fallback; desktop acrylic unavailable: {exception.Message}");
+        }
     }
 
     public void ShowLauncher()
     {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            var displayArea = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Nearest);
-            _appWindow.Move(new PointInt32(
-                displayArea.WorkArea.X + ((displayArea.WorkArea.Width - _appWindow.Size.Width) / 2),
-                displayArea.WorkArea.Y + ((displayArea.WorkArea.Height - _appWindow.Size.Height) / 2)));
-            Activate();
-            R1Storage.WriteLog("INFO Hotkey or activation pipe displayed the AppWindow");
-        });
+        DispatcherQueue.TryEnqueue(ShowLauncherCore);
     }
 
     public async Task RunRpcSpikeAsync()
@@ -133,6 +162,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public void Dispose()
     {
+        _orchestrator.Dispose();
+        _appSearchProvider.Dispose();
         _nativeWindow.Dispose();
     }
 

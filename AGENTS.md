@@ -1,7 +1,7 @@
 # Beacon 実装エージェント向けガイド (Codex)
 
 あなたは新Beacon（WinUI 3 Portable-firstランチャー・独立リポジトリ）の実装担当。
-作業前に必ず読む: `docs/rebuild/LESSONS.md`（失敗記録簿）→ `CLAUDE.md` → `docs/rebuild/PLAN.md` の該当Phase → 関連ADR。
+作業前に必ず読む: 本ファイル（特に「環境の既知制約」）→ `docs/rebuild/LESSONS.md`（未解決の失敗のみ）→ `CLAUDE.md` → `docs/rebuild/PLAN.md` の該当Phase → 関連ADR。
 タスクは `docs/rebuild/PROMPTS.md` のフェーズ単位で与えられる。
 
 ## リポジトリ配置（間違えないこと）
@@ -19,7 +19,18 @@
 7. **`Spotlight` という語をコードに書かない**（C#識別子・XAML・コメント・リソースキー・UI文字列・ログ・ファイル名・ブランチ名すべて）。ブランドは `Beacon`
 8. デザイン値は `src/Beacon.WinUI/Resources/DesignTokens.xaml` のトークンを追加・参照。直値の色・寸法を新規に書かない
 9. 仕様の解釈は `SPEC.md > 承認済みADR > ARCHITECTURE.md > DISTRIBUTION.md > PLAN.md` の優先順。独自判断で仕様を変えない。矛盾は実装せず報告
-10. **失敗したら `docs/rebuild/LESSONS.md` へ記録してから再試行**（事象・原因・再発防止）。Beacon-old側 `docs/spotlight/LESSONS.md` の環境系教訓（プロセスロック・ログ排他・警告大量時のerror抽出・rg分割・BOM保持）も有効
+10. **失敗時は `docs/rebuild/LESSONS.md` の記録基準を満たす場合のみ記録してから再試行**。下記「環境の既知制約」に該当する失敗は再記録せず、固定ルールに従って即座に切り替える
+
+## 環境の既知制約（固定ルール）
+
+過去に繰り返し発生した、自動化で防げない環境固有の制約。該当時はLESSONSへ記録せずこのルールに従う。
+
+- **ヘッドレス `codex exec` は使わない**（サンドボックスが `CreateProcessWithLogonW failed: 5` で補助プロセス起動を拒否する）。対話実行し、同エラーが出たら再試行せず承認済みの個別実行へ切り替える
+- **パス・ファイル名を推測しない**。ディレクトリ列挙（`rg --files` 等）で実在確認した名前だけを読む。SDK生成物（obj/bin配下）も実列挙してから検索する
+- **パッチ・引数を崩さない**: バッククォート・PowerShell行継続・補間文字列（`$()`）を含めない。複数行パッチはバッチを介さずArgumentListで単一引数として渡す。Windowsオブジェクト名・パスのC#はverbatim文字列。using追加は先頭の既存usingを明示contextにする
+- **一時PowerShellでも複雑な式を避ける**（switch式・foreach直後のパイプは解析エラー）。ファイル上書きは、Gitで現状確認→`$ErrorActionPreference='Stop'`→生成文字列の検証、を済ませてから1回だけ書く
+- **1ログファイルの書き込みプロセスは1つ**（`FileMode.Append`は非アトミック）。ログ読取は`FileShare.ReadWrite`。ログ出現待ちのテストはフェーズ跨ぎでログを初期化するかオフセットで判定する
+- ビルド前にOutput/Debug使用中プロセスを停止。大量警告時はerror行だけ抽出。rg検索は単純な語へ分割。BOMを保持。push前に`git remote -v`を確認
 
 ## 作業の進め方
 

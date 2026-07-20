@@ -60,7 +60,7 @@ Plugins/* → Flow.Launcher.Plugin
 |---|---|---|
 | Microsoft.WindowsAppSDK | Beacon.WinUIほか | R1で安定版選定・原文確認後にADR-0002へ記録 |
 | StreamJsonRpc | Beacon.WinUI / Beacon.PluginHost / Contracts境界 | 第一候補。R1で確定 |
-| Microsoft.Windows.CsWin32 | Beacon.Platform.Windows | 採用予定 |
+| Microsoft.Windows.CsWin32 | Beacon.Platform.Windows | 0.3.298をR3で採用。Win32/Shell APIの型安全なソース生成に使用。nupkg nuspecのMIT式とMicrosoft/CsWin32公式LICENSE原文を確認。開発時専用source generator（PrivateAssets=all）で、ランタイムDLLはPortable ZIPへ入らない |
 | CommunityToolkit.Mvvm | Beacon.WinUI / Beacon.Core | 採用予定。Fodyは使わない |
 | Microsoft.Extensions.Hosting / DI | Beacon.WinUI | 採用予定 |
 | NLog | Core / 各exe | DataRoot対応を確認して採用判断 |
@@ -74,6 +74,7 @@ Plugins/* → Flow.Launcher.Plugin
 |---|---:|---|---|
 | Microsoft.WindowsAppSDK | 2.2.0 | Beacon.WinUI。Unpackaged + self-contained WinUIとWindows App SDKランタイムをZIPへ同梱 | nupkg内`license.txt`: **MICROSOFT SOFTWARE LICENSE TERMS / MICROSOFT WINDOWS APP SDK**。MITではない。§3(a)(i)でNuGetがbinplaceしたframework-dependent/self-containedファイルの再頒布を許可。§3(b)の条件あり |
 | StreamJsonRpc | 2.25.29 | Beacon.WinUI / Beacon.PluginHostのNamed Pipe JSON-RPC。推移依存を下表のとおり同梱 | nuspec SPDX `MIT`、公式リポジトリ[`microsoft/vs-streamjsonrpc`](https://github.com/microsoft/vs-streamjsonrpc)のLICENSE原文と一致 |
+| System.Data.OleDb | 9.0.15 | Beacon.Platform.Windows。Everything不可時にOSのWindows Search IndexへSQL接続するため必要。Portable ZIPへmanaged assemblyを同梱し、OS標準Search.CollatorDSO providerを利用 | NuGet公式ページのMIT表記とdotnet/runtime公式`LICENSE.TXT`（.NET Foundation and Contributors、MIT原文）を照合済み |
 
 ### R1 Portableの推移依存（`Beacon.Next.deps.json`実測）
 

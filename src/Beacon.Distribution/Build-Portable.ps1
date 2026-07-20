@@ -56,6 +56,9 @@ foreach ($name in @('Settings', 'History', 'Plugins', 'Cache', 'Logs', 'Clipboar
 New-Item -ItemType File -Path (Join-Path $stage 'portable.flag') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'attribution.md') -Destination $stage
+$everythingDll = Join-Path $repositoryRoot 'src\Beacon.Platform.Windows\EverythingSDK\x64\Everything.dll'
+if (-not (Test-Path -LiteralPath $everythingDll)) { throw 'Everything SDK x64 DLL is missing.' }
+Copy-Item -LiteralPath $everythingDll -Destination $stage
 
 Compress-Archive -LiteralPath $stage -DestinationPath $zipPath -CompressionLevel Optimal
 Get-ChildItem -LiteralPath $stage -Recurse -File -Filter '*.dll' |

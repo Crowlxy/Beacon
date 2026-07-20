@@ -8,13 +8,13 @@
 
 ## 正式ドキュメント（docs/rebuild/ が正）
 優先順: `SPEC.md` > 承認済みADR(`adr/`) > `ARCHITECTURE.md` > `DISTRIBUTION.md` > `PLAN.md` > フェーズプロンプト。
-補助: `AUDIT.md`（A部=Beacon-old事実/B部=採用構成）/ `DEPENDENCY_MAP.md` / `COMPATIBILITY.md` / `MIGRATION.md` / `TEST_MATRIX.md` / `RISK_REGISTER.md` / `LESSONS.md`（**作業開始前に必読**）。
+補助: `AUDIT.md`（A部=Beacon-old事実/B部=採用構成）/ `DEPENDENCY_MAP.md` / `COMPATIBILITY.md` / `MIGRATION.md` / `TEST_MATRIX.md` / `RISK_REGISTER.md` / `LESSONS.md`（未解決の失敗のみ。環境の恒常制約は `AGENTS.md`「環境の既知制約」が正）。
 
 ## 承認済みの方向（2026-07-16）
 - WinUI 3でUI新規構築 / 一次配布はPortable ZIP（Unpackaged + Self-contained WinAppSDK）
 - 新規 `Beacon.sln` + `src/` + `tests/`（R1で生成。空プロジェクトの先行生成禁止）
 - Beacon-oldからは**由来とMIT表記を維持した選択的移植のみ**（ADR-0001）
-- Flow互換プラグインは `Beacon.PluginHost.exe` 隔離 + versioned JSON-RPC over Named Pipe（ADR-0003）
+- Flow互換プラグイン（第三者プラグイン対応）は**実装対象外**（2026-07-20ユーザー決定。ADR-0003のPluginHost隔離設計は将来再開時のために維持、R1ダミーは現状維持）
 - DataRoot: `portable.flag` + exe隣接 `Data\`。**保存先の無言切替禁止**。`%LOCALAPPDATA%\Beacon\Data` は将来の非Portable/MSIX用予約（ADR-0004）
 - iNKORE UIへの依存・移植は一切なし（Gate Dでバイナリ監査）/ MSIX・StoreはR11任意でリリースをブロックしない
 
@@ -31,7 +31,7 @@
 - プロセス境界を越えるのはシリアライズ可能なデータのみ（デリゲート・任意object・UI型は禁止）
 
 ## 運用
-- 該当フェーズの仕様とADRが承認される前に実装しない。Codexプロンプトは**次の承認済みフェーズの分だけ**作る（現在R0/R1のみ）
-- 失敗は `docs/rebuild/LESSONS.md` へ「事象・原因・再発防止」を記録してから再試行（Beacon-old側 `docs/spotlight/LESSONS.md` の環境系教訓も有効）
+- 該当フェーズの仕様とADRが承認される前に実装しない。Codexプロンプトは**次の承認済みフェーズの分だけ**作る（現在は統合R5=旧R5〜R8。2026-07-20ユーザー決定）
+- 失敗は `docs/rebuild/LESSONS.md` の記録基準を満たす場合のみ記録してから再試行。再発は文章追記でなく機械的防止（テスト→analyzer→CI→スクリプト→固定ルール）へ反映する
 - 事実と推測を分ける。Windows App SDK / WinUI 3 / パッケージングの判断はMicrosoft公式一次情報で確認
-- Gate A(R1後・技術成立性) / B(R4後・検索MVP) / C(R7後・プラグイン互換) / D(R10後・リリース)。Gateでは実際のRelease ZIPをクリーン環境で確認する
+- Gate A(R1後・技術成立性) / B(R4後・検索MVP) / C(統合R5後・完成度レビュー) / D(R10後・リリース)。Gateでは実際のRelease ZIPをクリーン環境で確認する

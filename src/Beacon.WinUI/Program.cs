@@ -1,3 +1,4 @@
+using Beacon.Core;
 using System.Text;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;

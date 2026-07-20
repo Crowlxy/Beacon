@@ -99,6 +99,16 @@ public sealed class QueryOrchestrator(IEnumerable<ISearchProvider> providers) : 
         }
     }
 
+    public void Cancel()
+    {
+        lock (_gate)
+        {
+            _sessionCancellation?.Cancel();
+            _currentSession = null;
+            _executionTokens = [];
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)

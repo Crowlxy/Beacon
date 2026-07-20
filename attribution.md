@@ -34,6 +34,16 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 ## Migration policy
 
+## R3 Windows platform components
+
+Beacon includes selectively adapted source derived from Flow Launcher and Wox under the MIT License, plus the x64 Everything SDK client DLL. Migrated source files identify their legacy paths. Microsoft.Windows.CsWin32 0.3.298 is MIT-licensed and runs only as a build-time source generator; its runtime DLL is not distributed.
+
+The Windows Index query guard and ItemUrl conversion are selectively adapted from `Beacon-old/Plugins/Flow.Launcher.Plugin.Explorer/Search/WindowsIndex/WindowsIndex.cs` and `QueryConstructor.cs` (Flow Launcher/Wox, MIT).
+
+System.Data.OleDb 9.0.15 is distributed under the .NET runtime MIT License, copyright .NET Foundation and Contributors.
+
+Flow Launcher and Wox contributors retain their original copyrights. The MIT License text above applies to their migrated portions and Microsoft.Windows.CsWin32.
+
 When code is migrated from the legacy implementation, retain all applicable copyright and license notices. At minimum, review:
 
 - Flow Launcher — MIT License

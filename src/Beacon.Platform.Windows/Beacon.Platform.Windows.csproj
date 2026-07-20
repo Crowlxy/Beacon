@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Beacon.Contracts\Beacon.Contracts.csproj" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.298" PrivateAssets="all" />
+    <PackageReference Include="System.Data.OleDb" Version="9.0.15" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="EverythingSDK\x64\Everything.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="Everything.dll" />
+  </ItemGroup>
+</Project>

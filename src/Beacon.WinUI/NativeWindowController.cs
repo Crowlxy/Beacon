@@ -7,6 +7,7 @@ internal sealed class NativeWindowController : IDisposable
 {
     private const int WindowProcedureIndex = -4;
     private const uint HotkeyMessage = 0x0312;
+    private const uint DwmCompositionChangedMessage = 0x031E;
     private const uint TrayMessage = 0x8001;
     private const uint LeftButtonUp = 0x0202;
     private const uint RightButtonUp = 0x0205;
@@ -84,6 +85,11 @@ internal sealed class NativeWindowController : IDisposable
 
     private IntPtr WindowProcedure(IntPtr windowHandle, uint message, IntPtr wParam, IntPtr lParam)
     {
+        if (message == DwmCompositionChangedMessage && !NativeMethods.ApplyWindowFrameStyle(windowHandle))
+        {
+            R1Storage.WriteLog("ERROR DWM rounded corners or border suppression failed after composition changed");
+        }
+
         if (message == HotkeyMessage && unchecked((uint)wParam.ToInt64()) == HotkeyId)
         {
             _show();
@@ -167,6 +173,15 @@ internal sealed class NativeWindowController : IDisposable
 
 internal static class NativeMethods
 {
+    private const int DwmWindowCornerPreference = 33;
+    private const int DwmCornerRound = 2;
+    private const int DwmBorderColor = 34;
+    private const int DwmColorNone = unchecked((int)0xFFFFFFFE);
+    private const int DwmNonClientRenderingPolicy = 2;
+    private const int DwmNonClientRenderingDisabled = 1;
+    private const int WindowStyleIndex = -16;
+    private const long WindowDialogFrameStyle = 0x00400000L;
+    private const uint FrameChangedFlags = 0x0037;
     public const uint MessageBoxIconError = 0x00000010;
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -177,6 +192,43 @@ internal static class NativeMethods
     {
         public int X;
         public int Y;
+    }
+
+    internal static bool ApplyWindowFrameStyle(IntPtr windowHandle)
+    {
+        var style = GetWindowLongPtrW(windowHandle, WindowStyleIndex);
+        var styleWithoutFrame = new IntPtr(style.ToInt64() & ~WindowDialogFrameStyle);
+        var frameRemoved = styleWithoutFrame == style ||
+            (SetWindowLongPtrW(windowHandle, WindowStyleIndex, styleWithoutFrame) != IntPtr.Zero &&
+             SetWindowPos(windowHandle, IntPtr.Zero, 0, 0, 0, 0, FrameChangedFlags));
+        var nonClientPolicy = DwmNonClientRenderingDisabled;
+        var preference = DwmCornerRound;
+        var borderColor = DwmColorNone;
+        var nonClientDisabled = DwmSetWindowAttribute(
+            windowHandle,
+            DwmNonClientRenderingPolicy,
+            ref nonClientPolicy,
+            sizeof(int)) >= 0;
+        var cornersApplied = DwmSetWindowAttribute(
+            windowHandle,
+            DwmWindowCornerPreference,
+            ref preference,
+            sizeof(int)) >= 0;
+        var borderSuppressed = DwmSetWindowAttribute(
+            windowHandle,
+            DwmBorderColor,
+            ref borderColor,
+            sizeof(int)) >= 0;
+        return frameRemoved && nonClientDisabled && cornersApplied && borderSuppressed;
+    }
+
+    internal static bool ApplyRoundedRegion(IntPtr windowHandle, int width, int height, int radius)
+    {
+        var region = CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2);
+        if (region == IntPtr.Zero) return false;
+        if (SetWindowRgn(windowHandle, region, true) != 0) return true;
+        _ = DeleteObject(region);
+        return false;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -216,8 +268,41 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool UnregisterHotKey(IntPtr windowHandle, uint id);
 
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr windowHandle, int attribute, ref int value, int valueSize);
+
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     internal static extern IntPtr SetWindowLongPtrW(IntPtr windowHandle, int index, IntPtr newValue);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtrW(IntPtr windowHandle, int index);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        IntPtr windowHandle,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(
+        int left,
+        int top,
+        int right,
+        int bottom,
+        int ellipseWidth,
+        int ellipseHeight);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr windowHandle, IntPtr region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr value);
 
     [DllImport("user32.dll")]
     internal static extern IntPtr CallWindowProcW(
@@ -248,6 +333,15 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetCursorPos(out Point point);
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetDpiForWindow(IntPtr windowHandle);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr MonitorFromPoint(Point point, uint flags);
+
+    [DllImport("shcore.dll")]
+    internal static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

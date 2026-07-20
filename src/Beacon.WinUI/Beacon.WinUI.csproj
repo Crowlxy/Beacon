@@ -18,6 +18,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Beacon.Contracts\Beacon.Contracts.csproj" />
+    <ProjectReference Include="..\Beacon.Core\Beacon.Core.csproj" />
+    <ProjectReference Include="..\Beacon.Platform.Windows\Beacon.Platform.Windows.csproj" />
     <ProjectReference Include="..\Beacon.PluginHost\Beacon.PluginHost.csproj" ReferenceOutputAssembly="false" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
     <PackageReference Include="StreamJsonRpc" Version="2.25.29" />
@@ -25,12 +27,19 @@
   <Target Name="CopyXamlBinaryFiles" AfterTargets="Build;Publish">
     <ItemGroup>
       <XamlBinaryFile Include="$(IntermediateOutputPath)*.xbf" />
+      <DesignTokenBinary Include="$(IntermediateOutputPath)Resources\DesignTokens.xbf" />
     </ItemGroup>
     <Copy SourceFiles="@(XamlBinaryFile)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(DesignTokenBinary)" DestinationFolder="$(OutDir)Resources" SkipUnchangedFiles="true" />
     <Copy
       Condition="'$(PublishDir)' != ''"
       SourceFiles="@(XamlBinaryFile)"
       DestinationFolder="$(PublishDir)"
+      SkipUnchangedFiles="true" />
+    <Copy
+      Condition="'$(PublishDir)' != ''"
+      SourceFiles="@(DesignTokenBinary)"
+      DestinationFolder="$(PublishDir)Resources"
       SkipUnchangedFiles="true" />
   </Target>
   <Target Name="RemoveWindowsDesktopRuntimePack" AfterTargets="ResolveRuntimePackAssets">

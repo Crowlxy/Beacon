@@ -1,7 +1,7 @@
-using Beacon.WinUI;
+using Beacon.Core;
 using NUnit.Framework;
 
-namespace Beacon.R1.Tests;
+namespace Beacon.Core.Tests;
 
 [TestFixture]
 public sealed class DataRootResolverTests
@@ -11,9 +11,7 @@ public sealed class DataRootResolverTests
     {
         using var directories = new TemporaryDirectories();
         File.WriteAllText(Path.Combine(directories.ExecutableRoot, "portable.flag"), string.Empty);
-
         var result = DataRootResolver.Resolve(directories.ExecutableRoot, directories.LocalAppDataRoot);
-
         Assert.Multiple(() =>
         {
             Assert.That(result.IsPortable, Is.True);
@@ -26,9 +24,7 @@ public sealed class DataRootResolverTests
     public void MissingFlagAndDataUsesLocalAppData()
     {
         using var directories = new TemporaryDirectories();
-
         var result = DataRootResolver.Resolve(directories.ExecutableRoot, directories.LocalAppDataRoot);
-
         Assert.Multiple(() =>
         {
             Assert.That(result.IsPortable, Is.False);
@@ -41,10 +37,8 @@ public sealed class DataRootResolverTests
     {
         using var directories = new TemporaryDirectories();
         Directory.CreateDirectory(Path.Combine(directories.ExecutableRoot, "Data"));
-
         var exception = Assert.Throws<DataRootResolutionException>(
             () => DataRootResolver.Resolve(directories.ExecutableRoot, directories.LocalAppDataRoot));
-
         Assert.That(exception!.Message, Does.Contain("portable.flag is missing"));
     }
 
@@ -54,10 +48,8 @@ public sealed class DataRootResolverTests
         using var directories = new TemporaryDirectories();
         File.WriteAllText(Path.Combine(directories.ExecutableRoot, "portable.flag"), string.Empty);
         File.WriteAllText(Path.Combine(directories.ExecutableRoot, "Data"), string.Empty);
-
         var exception = Assert.Throws<DataRootResolutionException>(
             () => DataRootResolver.Resolve(directories.ExecutableRoot, directories.LocalAppDataRoot));
-
         Assert.Multiple(() =>
         {
             Assert.That(exception!.Message, Does.Contain("cannot write"));
@@ -67,7 +59,7 @@ public sealed class DataRootResolverTests
 
     private sealed class TemporaryDirectories : IDisposable
     {
-        private readonly string _root = Path.Combine(Path.GetTempPath(), $"Beacon-R1-{Guid.NewGuid():N}");
+        private readonly string _root = Path.Combine(Path.GetTempPath(), $"Beacon-Core-{Guid.NewGuid():N}");
 
         public TemporaryDirectories()
         {
@@ -76,12 +68,7 @@ public sealed class DataRootResolverTests
         }
 
         public string ExecutableRoot { get; }
-
         public string LocalAppDataRoot { get; }
-
-        public void Dispose()
-        {
-            Directory.Delete(_root, true);
-        }
+        public void Dispose() => Directory.Delete(_root, true);
     }
 }

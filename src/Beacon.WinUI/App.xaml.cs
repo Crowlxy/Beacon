@@ -1,3 +1,4 @@
+using Beacon.Core;
 using Microsoft.UI.Xaml;
 
 namespace Beacon.WinUI;
@@ -24,8 +25,7 @@ public partial class App : Application, IDisposable
             _window = new MainWindow(resolution.Path);
             Program.Instance!.StartListening(_window.ShowLauncher);
             R1Storage.WriteLog("INFO Single-instance activation pipe listening");
-            _ = _window.RunRpcSpikeAsync();
-            R1Storage.WriteLog("INFO RPC spike scheduled");
+
         }
         catch (DataRootResolutionException exception)
         {
