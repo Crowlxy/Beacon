@@ -60,44 +60,83 @@ Beacon.Updater.exe … 更新差し替え専用（DISTRIBUTION.md §4）
 - 内蔵プロバイダー（R3/R6で移植する標準検索）は**本体プロセス内**のBeacon.Core経由。PluginHostが死んでも基本検索は生きる
 - PluginHostはJob Objectで本体に紐づけ、孤児化させない
 
-## 4. 検索契約（Beacon.Contracts — 概形。確定はPhase R2）
+## 4. 検索契約（Beacon.Contracts — Phase R2確定版）
+
+`Beacon.Contracts`は`net9.0`・依存ゼロとし、次の型だけをプロセス境界で共有する。
 
 ```csharp
+public static class ContractVersion
+{
+    public const int Current = 2;
+    public static bool TryValidate(int version, out string? failureReason);
+}
+
+public enum QueryScope
+{
+    All, Applications, Files, Folders, Settings, Actions, Calculator, Url, WebSearch
+}
+
+public enum ResultKind
+{
+    Unknown = 0, Application, File, Folder, Setting, Action, Calculation, Url, WebSearch, Plugin
+}
+
 public sealed record SearchRequest(
-    string SessionId, string RawQuery, QueryScope Scope,
-    int ContractVersion /* … */);
+    string SessionId, string RawQuery, QueryScope Scope, int ContractVersion);
 
 public sealed record SearchResultDto
 {
-    public required string Id { get; init; }            // セッション内一意
+    public required string Id { get; init; }
     public required string ProviderId { get; init; }
     public required string Title { get; init; }
     public string? Subtitle { get; init; }
-    public ResultKind Kind { get; init; }               // Unknown既定
+    public ResultKind Kind { get; init; }
     public double Score { get; init; }
     public IconDescriptor Icon { get; init; }
-    public string? ExecutionToken { get; init; }        // Host側で実体デリゲートに解決
+    public string? ExecutionToken { get; init; }
     public string? CopyText { get; init; }
     public string? AutoCompleteText { get; init; }
     public string? FilePath { get; init; }
 }
 
 public sealed record IconDescriptor(IconSource Source, string? Value);
-public enum IconSource { None, FilePath, FileShellIcon, FileThumbnail, UriOrDataUri, FluentGlyph, ProviderIcon }
+public enum IconSource
+{
+    None, FilePath, FileShellIcon, FileThumbnail, UriOrDataUri, FluentGlyph, ProviderIcon
+}
+
+public sealed record ExecuteRequest(
+    string SessionId, string ResultId, string ExecutionToken, int ContractVersion);
+public sealed record ExecuteResponse(bool Success, string? FailureReason);
+
+public interface ISearchProvider
+{
+    string ProviderId { get; }
+    IAsyncEnumerable<SearchResultDto> SearchAsync(
+        SearchRequest request, CancellationToken cancellationToken);
+}
 ```
 
-原則: UI型を含めない / デリゲート・任意`object`を含めない / 実行はExecutionTokenで元プロセスへ要求 / キャンセル可能な非同期 / 逐次(partial)配信 / ContractVersionを持つ / 古い・不正な結果を実行しない。
+原則: UI型、デリゲート、任意`object`、`IntPtr`を含めない。検索はキャンセル可能な非同期逐次配信とする。受信側は`ContractVersion.TryValidate`で版数不一致を例外にせず拒否できる。実行は現在のQuerySessionに登録されたResultIdとExecutionTokenの完全一致時だけ受理し、古い・不正な結果を実行しない。
 
-旧 `Result`（Beacon-old）からの写像（PluginHost内）:
+旧 `Result`（Beacon-old）からの写像（PluginHost内。実装はPhase R7）:
 
-| 旧 `Result` | DTO |
+| 旧 `Result` | `SearchResultDto` / Host内処理 |
 |---|---|
-| Title/SubTitle/Score/CopyText/AutoCompleteText/RecordKey | そのまま |
-| IcoPath / IcoPathAbsolute | `IconDescriptor(FilePath…)` |
-| `Icon` デリゲート(WPF ImageSource) | Host内で評価しPNG一時ファイル or data URI化（初期はProviderIconへ降格でも可、R7で決定） |
-| `Action` / `AsyncAction` | `ExecutionToken`（Hostがセッション辞書で保持・実行） |
-| `PreviewPanel` (WPF UserControl) | **非対応（Tier 4）**。`PreviewInfo` のデータ部分のみDTO化 |
-| `ContextData` | Hostから出さない（コンテキストメニューRPCで間接利用） |
+| `RecordKey`（なければHost採番） | `Id`（セッション内一意） |
+| Provider識別子 | `ProviderId` |
+| `Title` / `SubTitle` | `Title` / `Subtitle` |
+| `Score` | `Score` |
+| 結果種別 | `Kind` |
+| `CopyText` / `AutoCompleteText` | `CopyText` / `AutoCompleteText` |
+| ファイル実体のパス | `FilePath` |
+| `IcoPath` / `IcoPathAbsolute` | `Icon = IconDescriptor(FilePath, path)` |
+| `Icon`デリゲート（WPF ImageSource） | Host内で評価しPNG一時ファイルまたはdata URI化。初期は`ProviderIcon`へ降格可（R7で決定） |
+| `Action` / `AsyncAction` | Hostのセッション辞書へ保持し、`ExecutionToken`だけをDTOへ設定 |
+| `PreviewPanel`（WPF UserControl） | 非対応（Tier 4）。Phase R2 DTOには含めず、将来のプレビューデータ契約でデータ部分だけを扱う |
+| `ContextData`（任意`object`） | DTOへ出さず、Host内でコンテキストメニューRPCに間接利用 |
+
+この写像はAUDIT.md §A2の「UI型・デリゲート・任意objectを境界へ出さず、データ部分だけをDTO写像対象にする」と一致する。
 
 ## 5. Windows統合サービス（Beacon.Platform.Windows + Beacon.WinUI）
 

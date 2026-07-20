@@ -42,27 +42,33 @@ internal static class PluginHostProgram
 
 internal sealed class SearchRpc(JsonRpc rpc)
 {
-    [JsonRpcMethod("search")]
-    public async Task SearchAsync(SearchRequest request, CancellationToken cancellationToken)
+    [JsonRpcMethod("search", UseSingleObjectParameterDeserialization = true)]
+    public async Task SearchAsync(SearchRequest? request, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        if (request.ContractVersion != ContractVersion.Current ||
+        if (request is null ||
+            !ContractVersion.TryValidate(request.ContractVersion, out _) ||
             string.IsNullOrWhiteSpace(request.SessionId) ||
             request.SessionId.Length > 128 ||
-            request.RawQuery.Length > 4096)
+            request.RawQuery is null ||
+            request.RawQuery.Length > 4096 ||
+            !Enum.IsDefined(request.Scope))
         {
-            throw new ArgumentException("Invalid search request.", nameof(request));
+            return;
         }
 
         for (var index = 1; index <= 5; index++)
         {
             await Task.Delay(150, cancellationToken);
-            var result = new SearchResultDto(
-                $"{request.SessionId}:{index}",
-                "r1-dummy",
-                $"{request.RawQuery} result {index}",
-                100 - index,
-                ContractVersion.Current);
+            var result = new SearchResultDto
+            {
+                Id = $"{request.SessionId}:{index}",
+                ProviderId = "r1-dummy",
+                Title = $"{request.RawQuery} result {index}",
+                Kind = ResultKind.Plugin,
+                Score = 100 - index,
+                Icon = new(IconSource.ProviderIcon, "r1-dummy"),
+                ExecutionToken = $"{request.SessionId}:execute:{index}",
+            };
             await rpc.NotifyWithParameterObjectAsync("searchResult", result);
         }
     }

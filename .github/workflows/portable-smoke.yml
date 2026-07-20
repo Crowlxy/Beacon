@@ -13,6 +13,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
+      - name: Check Contracts/Core UI references
+        shell: pwsh
+        run: ./src/Beacon.Distribution/Test-NoUiReferences.ps1
       - name: Build portable ZIP
         shell: pwsh
         run: ./src/Beacon.Distribution/Build-Portable.ps1

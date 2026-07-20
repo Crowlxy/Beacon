@@ -93,9 +93,9 @@ public sealed partial class MainWindow : Window, IDisposable
 
             try
             {
-                await rpc.InvokeWithCancellationAsync(
+                await rpc.InvokeWithParameterObjectAsync(
                     "search",
-                    [new SearchRequest(Guid.NewGuid().ToString("N"), "beacon", ContractVersion.Current)],
+                    new SearchRequest(Guid.NewGuid().ToString("N"), "beacon", QueryScope.All, ContractVersion.Current),
                     cancellation.Token);
             }
             catch (OperationCanceledException)
@@ -143,7 +143,7 @@ public sealed partial class MainWindow : Window, IDisposable
         [JsonRpcMethod("searchResult", UseSingleObjectParameterDeserialization = true)]
         public void OnSearchResult(SearchResultDto result)
         {
-            if (result.ContractVersion != ContractVersion.Current || string.IsNullOrWhiteSpace(result.Id))
+            if (string.IsNullOrWhiteSpace(result.Id))
             {
                 return;
             }

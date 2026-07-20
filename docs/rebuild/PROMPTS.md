@@ -1,375 +1,247 @@
 # PROMPTS — Codex実装プロンプト
 
 運用: ユーザーが本リポジトリ（`C:\Users\ha.takaku\Desktop\Project\Beacon`）を作業ディレクトリとしてCodexを**対話モードで**実行し、以下のプロンプト本文を渡す（モデル: gpt-5.6-sol）。ヘッドレスの `codex exec` はこの環境ではサンドボックス制限で失敗するため使わない（LESSONS-archive.md 2026-07-16）。
-**本ファイルにはPhase R0とR1のみ存在する。** R2以降はGate A通過後、実コードと確定ADRを見てClaudeが作成する（先に作り切らない）。
+**本ファイルには現行フェーズのプロンプトのみ置く。** 次フェーズ以降は各フェーズ完了後、実コードと確定ADRを見てClaudeが作成する（先に作り切らない）。現行はR3（R2は2026-07-20レビュー済み・完了。完了プロンプトは次フェーズ完了時に削除する）。
 
 ---
 
-## Phase R0: 現状監査プロンプト
+## Phase R2: ContractsとCoreの境界確立プロンプト【完了 2026-07-20】
+
+前提: Gate A承認済み（2026-07-17）。R1のスパイク用最小DTO（`src/Beacon.Contracts/SearchContracts.cs`・ContractVersion=1）を本設計へ置き換える。
 
 ```
-あなたはBeacon（WinUI 3再構築・独立リポジトリ）のPhase R0（現状監査）を担当する。
-コードの実装・修正は一切しない。調査とドキュメント更新のみを行う。
+あなたはBeacon（WinUI 3再構築・独立リポジトリ）のPhase R2（ContractsとCoreの境界確立）を担当する。
+目的はプロセス境界を越える検索契約の確定と、UI非依存のBeacon.Core新設。UI実装はしない。
 
-## リポジトリ配置（重要）
-- 本リポジトリ（Crowlxy/Beacon・作業対象）: C:\Users\ha.takaku\Desktop\Project\Beacon
-- 調査対象のBeacon-old（Crowlxy/Beacon-old・読み取り専用）: C:\Users\ha.takaku\Desktop\Project\Beacon-old
-  ※**Beacon-oldフォルダ内のファイルを一切変更しない**
+## リポジトリ配置
+- 本リポジトリ（作業対象）: C:\Users\ha.takaku\Desktop\Project\Beacon
+- Beacon-old（参照のみ・変更禁止）: C:\Users\ha.takaku\Desktop\Project\Beacon-old
 
 ## 読むべき文書（この順で）
-1. docs/rebuild/LESSONS.md（失敗記録簿。作業前必読。Beacon-old側 docs/spotlight/LESSONS.md の環境系教訓も読む）
+1. docs/rebuild/LESSONS.md（必読。特にStreamJsonRpcのUseSingleObjectParameterDeserializationと複数プロセスログの教訓）
 2. AGENTS.md
-3. docs/rebuild/SPEC.md / ARCHITECTURE.md / PLAN.md の Phase R0
-4. docs/rebuild/AUDIT.md / DEPENDENCY_MAP.md / COMPATIBILITY.md（今回更新する対象。「未確認」欄を埋める）
+3. docs/rebuild/ARCHITECTURE.md §1・§4 / adr/ADR-0001（特に§4-5）/ adr/ADR-0003
+4. docs/rebuild/AUDIT.md §A2 / COMPATIBILITY.md §3
+5. docs/rebuild/PLAN.md の Phase R2
 
 ## 対象範囲
-- AUDIT.md §A8 の未確認事項をすべてBeacon-oldの実コードで確認して埋める:
-  - 標準12プラグイン（Beacon-old Plugins/*）それぞれのWPF依存箇所（using System.Windows*, UserControl, ImageSource, ISettingProvider実装, PreviewPanel使用）を列挙し、COMPATIBILITY.md §2 の分類（A〜E）を根拠ファイル付きで確定する
-  - Flow.Launcher.Infrastructure/Win32Helper.cs と DialogJump/ のWPF結合度（WPF Window/HwndSource前提のAPIを列挙）
-  - ChefKeys 0.1.2 のUIフレームワーク依存とライセンス（NuGet原文を確認。推測禁止）
-  - Droplex / FSharp.Core / InputSimulator / System.Drawing.Common の実際の参照元と用途
-  - 履歴・TopMostRecord・UserSelectedRecordの保存形式（ファイルパス・シリアライザ）とUI依存
-  - Everything.dll のアーキテクチャ（x64のみか。EverythingSDKフォルダの実物を確認）
-  - Flow.Launcher.Localization の生成物とWinUIでの利用可否（確認できる範囲で。不能なら「未確認・要R1実験」と書く）
-- WPF型が漏れている公開API（Beacon-old Flow.Launcher.Plugin全体）をgrepで全抽出し、AUDIT.md §A2を完成させる
-- 再利用/アダプト/書き直し/廃止のファイルマップを AUDIT.md へ追加（ARCHITECTURE.md §1の行き先プロジェクト単位。移植候補ファイルのBeacon-old内パスを明記）
-- Beacon-old Release配布物のDLL一覧: Beacon-old側で dotnet build -c Release し Output/Release を列挙してAUDIT.mdへ追記（ビルド生成物はBeacon-old側に置いたまま。コミットしない）
-- 上流Flow Launcherの選択的移植手順を docs/rebuild/UPSTREAM.md として新規作成（Beacon-old dev経由・ファイル単位移植・由来とMIT表記の記録手順）
-- 現行UIのスクリーンショットを docs/rebuild/baseline/ へ保存（Alt+Space表示・検索展開・設定画面。取得できない場合は手順だけ書いてユーザーへ依頼）
+
+### 1. Beacon.Contracts 本設計（src/Beacon.Contracts。net9.0・依存ゼロを維持）
+ARCHITECTURE.md §4 の概形を正として以下を確定実装する。R1の最小DTOは置き換えてよい
+（互換不要。ContractVersion.Current は 2 へ上げる）:
+- ContractVersion: const int Current = 2。受信側は不一致を拒否する（例外ではなく「無視+警告ログ可能」な戻り値設計）
+- QueryScope enum: All / Applications / Files / Folders / Settings / Actions / Calculator / Url / WebSearch
+  （SPEC §4の検索対象と一致させる。既定All。R8のカテゴリチップはこの列挙を使う前提）
+- ResultKind enum: Unknown=0 / Application / File / Folder / Setting / Action / Calculation / Url / WebSearch / Plugin
+- SearchRequest: sealed record (string SessionId, string RawQuery, QueryScope Scope, int ContractVersion)
+- SearchResultDto: ARCHITECTURE §4 の形をそのまま（required Id/ProviderId/Title、
+  Subtitle?/Kind/Score/Icon/ExecutionToken?/CopyText?/AutoCompleteText?/FilePath?）。
+  ContractVersionは結果単位では持たない（リクエスト/ハンドシェイク単位）
+- IconDescriptor: sealed record (IconSource Source, string? Value) / IconSource enum: ARCHITECTURE §4 のまま
+- 実行要求: ExecuteRequest (string SessionId, string ResultId, string ExecutionToken, int ContractVersion) と
+  ExecuteResponse (bool Success, string? FailureReason)
+- Provider contract: ISearchProvider { string ProviderId { get; }
+  IAsyncEnumerable<SearchResultDto> SearchAsync(SearchRequest request, CancellationToken cancellationToken); }
+- 全DTOはSystem.Text.Jsonで往復可能（デリゲート・object・UI型・IntPtrを含めない）
+
+### 2. Beacon.Core 新設（src/Beacon.Core。net9.0・Beacon.Contractsのみ参照）
+今回入れるのはクエリ編成の骨格だけ（ランキングはR6、DataRootResolverの移設はR3）:
+- QuerySession/QueryOrchestrator: 新しいクエリで新SessionIdを発行し、前セッションをCancellationTokenで
+  キャンセルする。複数ISearchProviderの逐次結果を1本のストリームへ統合する
+- 古い結果の破棄: 現在セッション以外のSessionIdの結果は配信しない
+- 実行検証: ExecuteRequestが「現在セッションのResultId/ExecutionToken」であるときだけ実行対象として
+  受理する（古い・不正な要求はExecuteResponse(Success=false, 理由)で拒否。SPEC §5「古い・不正な結果を実行しない」）
+- ContractVersion不一致のSearchRequest/ExecuteRequestを受理しない
+
+### 3. UI参照禁止のビルド+CI強制（ADR-0001 §5）
+- Beacon.Contracts / Beacon.Core は純粋net9.0のまま（UseWPF/UseWindowsForms/FrameworkReferenceなし）
+- CIへチェックを追加（既存 .github/workflows/portable-smoke.yml への step追加でよい）:
+  src/Beacon.Contracts と src/Beacon.Core（obj/bin除外）に対して
+  「using System.Windows」「Microsoft.UI.Xaml」「Windows.UI.Xaml」「UseWPF」「UseWindowsForms」
+  「FrameworkReference」のgrepが0件であることを検証し、ヒットしたらfailさせる
+- 同じチェックをローカルでも実行できるようスクリプト化する（Beacon.Distribution配下でよい）
+
+### 4. 旧Result→DTO変換方針の確定（ドキュメント）
+- ARCHITECTURE.md §4 の見出し「（概形。確定はPhase R2）」を確定版へ改め、実装した型と一致させる
+- 写像表（旧Result→DTO）を実装済みの型名で確定する。AUDIT.md §A2の
+  「データ部分だけをDTO写像対象にする」との整合を確認し、矛盾があれば実装せず報告する
+
+### 5. R1スパイクの追随
+- Beacon.PluginHost（ダミー）と Beacon.WinUI のRPC spikeを新契約へ追随させる
+  （SessionId/Scope/ContractVersion=2を流す。UseSingleObjectParameterDeserialization=trueを維持）
+- Build-Portable.ps1 → Test-Portable.ps1（既定と-UseActivationPipeの両方）が引き続き通ること
+
+### 6. テスト（tests/Beacon.Core.Tests 新設。NUnit・using NUnit.Framework明示）
+- 全DTOのSystem.Text.Json往復（値の完全一致。enum・null許容含む）
+- 逐次配信: ダミーProvider2本の結果が到着順に統合されること
+- キャンセル: 新クエリ開始で旧セッションのCancellationTokenがキャンセルされ、旧SessionIdの結果が配信されないこと
+- 実行要求: 現在セッションのトークンは受理、古いセッション/未知のトークン/版数不一致は拒否されること
+- 既存 tests/Beacon.R1.Tests は現状維持（DataRoot関連。移設はR3）
 
 ## 非対象範囲（やらない）
-- 一切のコード実装・新プロジェクト作成（Beacon.sln生成はR1）
-- Beacon-old側のあらゆるファイル変更（ビルドの一時生成物を除く）
-- パッケージの追加
+- UI実装・DesignTokens / ランキング・履歴（R6）/ Beacon-oldからのコード移植（R3以降）
+- 実プラグインのロード・PluginHost本実装（R7）/ DataRootResolverのCore移設（R3）
+- Beacon.Platform.Windowsの生成（R3）/ パッケージの追加
 
-## 変更可能ファイル（すべて本リポジトリ側）
-docs/rebuild/AUDIT.md, DEPENDENCY_MAP.md, COMPATIBILITY.md, UPSTREAM.md(新規), baseline/(新規), LESSONS.md（失敗時）
-
-## 禁止事項
-- 推測で「未確認」欄を埋めること。確認できなければ「未確認」のまま理由を書く
-- `Spotlight` という語を成果物のコード欄・ファイル名に書くこと（散文は可）
-- Beacon-oldの変更・コミット
-
-## ビルド／テスト
-- Beacon-old側: dotnet build Flow.Launcher.sln のベースライン記録（所要時間・警告数）。実行前に Output/Debug を使用中のBeaconプロセスがないか確認（既知事象）
-- 本リポジトリ側: ビルド対象なし（ドキュメントのみ）
-
-## 成果物・完了条件
-- AUDIT.md A部に「未確認」が残っていない、または残った項目に理由が明記されている
-- COMPATIBILITY.md §2 の全12行が根拠ファイル付きで確定している
-- UPSTREAM.md が存在し移植手順が実行可能
-- Beacon-oldに差分がない（git status で確認）
-
-## 失敗時
-docs/rebuild/LESSONS.md へ「事象・原因・再発防止」を記録してから再試行する。
-
-## ライセンス確認
-新たに判明した依存のライセンスは原文を確認し、DEPENDENCY_MAP.mdへ記録する。
-
-## Git差分要約
-最後に変更ファイル一覧と各ファイルの変更概要を報告する。コミットはユーザーが行う。
-```
-
----
-
-## Phase R1修正: CI Portable smoke失敗（2026-07-17 / GitHub Actions run 29561124234）
-
-前提: B1〜B4は実装済みでPR #1を作成済み。CIの `Portable smoke`（windows-latest, `-UseActivationPipe`）が smoke-b 段階で失敗した。ローカルでは同一手順が成功している。
-
-```
-あなたはBeaconリポジトリ（C:\Users\ha.takaku\Desktop\Project\Beacon）のCI失敗を修正する。
-開始前に docs/rebuild/LESSONS.md を読む。Beacon-old は変更禁止。コミットはユーザーが行う。
-
-## 事象（GitHub Actions run 29561124234 の実測）
-- Test-Portable.ps1 -UseActivationPipe が smoke-b 段階の
-  「Second Beacon.Next instance did not exit within 15 seconds.」（67行目）で失敗。
-- artifact の beacon.log（smoke-b/Beacon/Data/Logs/beacon.log）の分析:
-  - smoke-a: 06:50:45.88 起動 → 45.97 Hotkey and tray registered → 46.13 displayed
-    → 48.53/48.66 RPC結果2件 → 48.68 キャンセル確認。activation用2本目は exit 0（合格）。
-  - smoke-b: 06:50:49.04 起動 → 49.118 registered → 49.17 displayed → 50.24 キャンセル確認。
-  - 失敗時刻 06:51:04.26 は 49.25頃に起動した activation プロセスの WaitForExit(15000) 満了と一致。
-    49.17 の displayed はパイプ経由シグナルが届いた可能性を示すが、
-    シグナル後にプロセスが終了していない（原因未確定。断定するな）。
-
-## 作業
-1. 診断可能化（必須。原因確定前に修正だけ入れない）
-   - Program.Main のセカンダリパス（TryAcquire失敗側）に、SignalExistingAsync の結果と
-     「終了直前」のログを追加する。R1Storage初期化前なので、DataRootResolver.Resolve を
-     セカンダリでも実行してから書く（失敗時はログなしで終了コードのみでよい）。
-   - Test-Portable.ps1: 各フェーズ（smoke-a / smoke-b）の開始・各待機の成否を
-     タイムスタンプ付き Write-Host で出力。activation プロセスのタイムアウト時は
-     HasExited / ExitCode（取得可能なら）を出力してから throw。
-   - Test-Portable.ps1: smoke-a の Test-Beacon 完了直後に beacon.log を
-     artifacts\logs\smoke-a-beacon.log へコピーする（Move-Item で消える前に保全）。
-     portable-smoke.yml の upload パスへ artifacts/logs/** を追加。
-2. 原因調査と最小修正
-   - 有力仮説: Unpackaged self-contained の WinAppSDK 自動ブートストラップが
-     セカンダリプロセスの終了処理（Bootstrap shutdown）でハングする。
-     Microsoft公式一次情報（bootstrap auto-initializer の仕様）で挙動を確認する。
-   - 仮説が裏付けられる場合の候補修正: セカンダリパスの return を
-     Environment.Exit(exitCode) に変え、通常のランタイム終了処理を経由させない。
-     ただし採用理由と根拠をコード近傍コメントではなく R1_REPORT.md へ記録する。
-   - 別原因が判明した場合はそれを最小修正する。推測での修正合わせ込みは禁止。
-3. 検証
-   - ローカルで Build-Portable.ps1 → Test-Portable.ps1 → Test-Portable.ps1 -UseActivationPipe が成功。
-   - dotnet test -c Release で4件成功。禁止語・禁止依存の再確認。
-   - 修正内容と診断ログの読み方を R1_REPORT.md の「残リスク」節へ反映。
-   - LESSONS.md へ本事象を記録（原因未確定のまま修正した場合はその旨を明記）。
+## 変更可能ファイル
+src/Beacon.Contracts/**, src/Beacon.Core/**(新規), tests/Beacon.Core.Tests/**(新規),
+src/Beacon.PluginHost/Program.cs, src/Beacon.WinUI/(RPC spike追随に必要な最小限),
+Beacon.sln, .github/workflows/portable-smoke.yml, src/Beacon.Distribution/(禁止参照チェックスクリプト),
+docs/rebuild/ARCHITECTURE.md(§4確定), docs/rebuild/LESSONS.md(失敗時)
 
 ## 禁止事項
-- Spotlight の語をコード・ログ・ファイル名に書かない。
-- 15秒タイムアウトの単純延長だけで解決扱いにしない（延長する場合も原因の記録が必須）。
-- ワークフローの成功条件を緩めない（ERROR/Exception 0件・全マーカー必須のまま）。
-
-## Git差分要約
-最後に変更ファイル一覧と各ファイルの変更概要を報告する。コミット・pushはユーザーが行い、PR #1 のCI再実行で検証する。
-```
-
----
-
-## Phase R1修正: Gate A差し戻し B1〜B4（2026-07-17）
-
-前提: R1本体は実装済み。開発機スモーク・テスト4件・iNKORE/TTF不在・禁止語ゼロはGate Aレビューで確認済み。差し戻しは下記4点+報告書。Gate A承認はこれらの解消後。
-
-```
-あなたはBeacon（WinUI 3再構築・独立リポジトリ）のPhase R1 Gate A差し戻し対応を担当する。
-対応はB1〜B4と報告書作成のみ。スコープを広げない。
-
-## リポジトリ配置
-- 本リポジトリ（作業対象）: C:\Users\ha.takaku\Desktop\Project\Beacon
-- Beacon-old（参照のみ・変更禁止）: C:\Users\ha.takaku\Desktop\Project\Beacon-old
-
-## 読むべき文書
-1. docs/rebuild/LESSONS.md（必読）
-2. AGENTS.md
-3. docs/rebuild/adr/ADR-0002-portable-distribution.md / DEPENDENCY_MAP.md B部
-
-## B1: 配布ZIPからWPFランタイムパックを除去する
-事実（レビューで確認済み）:
-- artifacts/Beacon-Portable-x64.zip の Beacon.Next.deps.json に
-  runtimepack.Microsoft.WindowsDesktop.App.Runtime.win-x64/9.0.17 が含まれ、
-  PresentationFramework*/PresentationCore/WindowsBase/System.Windows.*/wpfgfx_cor3 等
-  約60ファイルがZIPに同梱されている。
-- src/Beacon.WinUI/obj/project.assets.json の frameworkReferences には
-  WindowsDesktop が無い（Microsoft.NETCore.App と Windows SDK projection のみ）。
-  つまり restore ではなく build/publish 時のターゲットが追加している。
-手順:
-1. dotnet publish src/Beacon.WinUI/Beacon.WinUI.csproj -c Release -r win-x64 -bl で
-   binlog を取得し、FrameworkReference / RuntimePack に
-   Microsoft.WindowsDesktop.App を追加しているターゲットを特定する（推測で直さない）
-2. 特定した原因に対する最小の除去策を Beacon.WinUI.csproj へ適用する
-   （候補: <FrameworkReference Remove="Microsoft.WindowsDesktop.App" /> 等。
-   binlogの事実に合わせる）
-3. ZIP再生成後、Presentation*/WindowsBase/System.Windows.*/wpfgfx/UIAutomation*/
-   ReachFramework/System.Printing が1つも含まれないことを portable-dlls.txt で確認し、
-   除去前後のZIPサイズを記録する
-4. Microsoft公式一次情報で除去不能と判明した場合のみ、根拠URLと理由を
-   ADR-0002へ記録して同梱を許容する（その判断はR1_REPORTにも書く）
-※binlog（*.binlog）はコミットしない。
-
-## B2: ADR-0002「R1で記録する欄」を実測で埋める
-docs/rebuild/adr/ADR-0002-portable-distribution.md の表5項目:
-- Windows App SDK バージョン（採用中: 2.2.0。Microsoft公式で安定版であることを確認）
-- 最小Windowsバージョン（csprojのTargetPlatformMinVersionと公式要件を突き合わせる）
-- Self-contained配布サイズ実測（B1適用後のZIPサイズ）
-- ライセンス（NuGetパッケージ内のライセンス原文を実際に開いて確認。推測禁止。
-  WinAppSDKはMITではない可能性が高い—原文の名称と再頒布可否を記録）
-- Unpackaged既知問題（ホットキー/トレイ/Backdrop。公式ドキュメント・GitHub issueで確認）
-
-## B3: 採用依存の文書化
-- docs/rebuild/DEPENDENCY_MAP.md B部へ、実際に採用した版数で記録:
-  Microsoft.WindowsAppSDK 2.2.0 / StreamJsonRpc 2.25.29（各ライセンス原文確認）
-- 配布ZIPに入る推移的依存も一覧化する（deps.json由来: MessagePack,
-  MessagePack.Annotations, Nerdbank.MessagePack, Nerdbank.Streams, Newtonsoft.Json,
-  PolyType, Microsoft.VisualStudio.Threading, Microsoft.VisualStudio.Validation,
-  System.IO.Pipelines 等。ライセンスを原文確認して表へ）
-- attribution.md へ表示義務のあるものを追記
-
-## B4: クリーン環境スモークのGitHub Actionsワークフロー
-新規: .github/workflows/portable-smoke.yml
-- トリガー: workflow_dispatch と pull_request（mainターゲット）
-- runs-on: windows-latest（WinAppSDK Runtime未導入のクリーン環境として使う）
-- 手順: actions/setup-dotnet で .NET 9 → Build-Portable.ps1 → Test-Portable.ps1 →
-  失敗時も beacon.log と portable-dlls.txt を actions/upload-artifact で回収（if: always()）
-- CIでは keybd_event によるホットキー送出が届かない可能性がある。
-  Test-Portable.ps1 に -UseActivationPipe スイッチを追加:
-  ホットキー送出の代わりに Beacon.Next.exe をもう1本起動し、
-  単一インスタンスのアクティベーションパイプ経由で表示させる
-  （2本目は終了コード0で即終了すること自体も検証になる）。
-  ローカル実行の既定動作（キー送出）は変えない。CIではこのスイッチを使う
-- ついでに同スクリプトの既知不備を直す: 15秒deadlineが「登録待ち」と
-  「表示/RPC待ち」で共有されており後段の時間が枯渇する。段階ごとに別deadlineにする
-※ワークフローの実行確認はpush後にユーザーが行う。Actionsの成功判定に必要な
-  チェックポイント（ログマーカー一覧）を報告に含めること。
-
-## 報告書: docs/rebuild/R1_REPORT.md（新規・R1プロンプトの未提出成果物）
-PLAN.md R1の各検証項目の成否を表で記録する（失敗・未実施も隠さず書く）。
-今回のB1〜B4の結果、ZIPのDLL一覧参照、サイズ、既知の制約
-（クリーン環境検証はwindows-latest=Server系イメージで実施、の注記）を含める。
-
-## 非対象範囲（やらない）
-- 上記以外のコード変更・リファクタリング / パッケージの追加・更新（除去は可）
-- UI実装
-
-## 禁止事項
-- `Spotlight` という語（識別子・ログ・文字列・ワークフロー名すべて）
-- Beacon-old側の変更
-- ライセンス欄を推測で埋めること
+- `Spotlight` という語（識別子・ログ・文字列・ファイル名すべて）
+- Contracts/CoreへのWPF・WinUI・WinForms参照（本フェーズの主目的）
+- DTOへのデリゲート・任意object・UI型・非シリアライズ型の追加
+- Beacon-old側の変更 / 新規NuGet依存の追加
 
 ## ビルド／検証（この順で全部やる）
 1. dotnet build Beacon.sln -c Release で0エラー
-2. Build-Portable.ps1 でZIP再生成 → portable-dlls.txt にWPF系が無いこと（B1）
-3. Test-Portable.ps1（既定モード）が最後まで通ること
-4. Test-Portable.ps1 -UseActivationPipe も最後まで通ること（CI経路のローカル検証）
-5. dotnet test -c Release で4件成功
-6. スモーク後にBeacon.Nextプロセスが残っていないこと（既知事象）
+2. dotnet test -c Release で全テスト成功（R1の4件+新規Core.Tests）
+3. 禁止参照チェックスクリプトがローカルで0件
+4. Build-Portable.ps1 → Test-Portable.ps1（既定）→ Test-Portable.ps1 -UseActivationPipe が通ること
+5. スモーク後にBeacon.Nextプロセスが残っていないこと（既知事象）
 
-## 失敗時
-docs/rebuild/LESSONS.md へ「事象・原因・再発防止」を記録してから再試行。
-
-## Git差分要約
-変更ファイル一覧と概要を報告する。コミットはユーザーが行う。
-```
-
----
-
-## Phase R1修正: スモーク残課題2点（2026-07-17）
-
-前提: R1本体は実装済み。XBF同梱ZIPの再スモーク（2026-07-17）で、起動〜ホットキー登録〜RPC spike開始まで全チェックポイント通過を確認済み。残る失敗は下記2点のみ（LESSONS.md 2026-07-17 参照）。
-
-```
-あなたはBeacon（WinUI 3再構築・独立リポジトリ）のPhase R1の残課題修正を担当する。
-修正は2点のみ。スコープを広げない。
-
-## リポジトリ配置
-- 本リポジトリ（作業対象）: C:\Users\ha.takaku\Desktop\Project\Beacon
-- Beacon-old（参照のみ・変更禁止）: C:\Users\ha.takaku\Desktop\Project\Beacon-old
-
-## 読むべき文書
-1. docs/rebuild/LESSONS.md（特に 2026-07-17 のエントリ。必読）
-2. AGENTS.md
-
-## 修正1: Test-Portable.ps1 のホットキー送信タイミング（競合の解消）
-ファイル: src/Beacon.Distribution/Test-Portable.ps1
-現状: ログファイルの出現を待った直後に Invoke-BeaconHotkey を呼んでいるが、
-実際の RegisterHotKey 完了（ログ行 "Hotkey and tray registered"）は約150ms後で、
-送信したキーが登録前に失われる。
-修正: ログ「ファイルの存在」ではなくログ「内容」に
-'Hotkey and tray registered' が現れるまで待ってから Invoke-BeaconHotkey を呼ぶ。
-待機はdeadline（15秒）内でポーリング。deadline超過時は
-'Hotkey registration was not observed.' でthrowする。
-ログ読み取りは FileShare 競合を避けるため既存と同じ Get-Content -Raw を使う。
-
-## 修正2: RPC通知のパラメータバインド不一致
-ファイル: src/Beacon.WinUI/MainWindow.xaml.cs（SearchResultReceiver）
-現状: サーバー（Beacon.PluginHost）は NotifyWithParameterObjectAsync("searchResult", result) で
-SearchResultDto を「名前付きパラメータオブジェクト」として送るが、
-受信側 OnSearchResult(SearchResultDto result) の [JsonRpcMethod("searchResult")] に
-UseSingleObjectParameterDeserialization = true が無く、バインド失敗で通知が黙って破棄される。
-修正: 属性を [JsonRpcMethod("searchResult", UseSingleObjectParameterDeserialization = true)] へ変更。
-これで解決しない場合のみ、StreamJsonRpc 2.25.29 のドキュメント/実装を確認して原因を特定し、
-サーバー側を含む最小の修正を行う（推測で別APIへ書き換えない）。
-
-## 非対象範囲（やらない）
-- 上記2ファイル以外のコード変更（ビルドに必要な場合を除く）
-- パッケージの追加・更新 / リファクタリング
-
-## 禁止事項
-- `Spotlight` という語（識別子・ログ・文字列すべて）
-- Beacon-old側の変更
-
-## ビルド／検証（この順で全部やる）
-1. dotnet build Beacon.sln -c Release で0エラー
-2. src/Beacon.Distribution/Build-Portable.ps1 でZIP再生成
-3. src/Beacon.Distribution/Test-Portable.ps1 が最後まで通り
-   'Portable launch, hotkey, RPC cancellation, and folder-move restart passed.' が出ること
-4. artifacts/smoke-b/Beacon/Data/Logs/beacon.log に
-   'Hotkey or activation pipe displayed the AppWindow' と
-   'RPC incremental result' と 'RPC cancellation confirmed' があり、ERRORが無いこと
-※検証中はビルド出力を使用中のBeacon.Nextプロセスが残っていないか先に確認する（既知事象）
+## 成果物・完了条件（PLAN.md Phase R2と同一）
+- Contracts/CoreにWPF・WinUI参照がない（ビルド設定+CI grepの両方で検証可能）
+- 逐次結果・キャンセル・実行要求（受理と拒否）がテストで再現できる
+- Result→DTO写像表がARCHITECTURE §4で実装と一致した確定版になっている
+- R1スモーク（両モード）が新契約でも通る
 
 ## 失敗時
 docs/rebuild/LESSONS.md へ「事象・原因・再発防止」を記録してから再試行。同じ失敗を繰り返さない。
 
 ## Git差分要約
-変更ファイル一覧と概要を報告する。コミットはユーザーが行う。
+変更・追加ファイル一覧と概要を報告する。コミットはユーザーが行う。
 ```
 
 ---
 
-## Phase R1: WinUI 3 / Portable技術スパイクプロンプト
+## Phase R3: Windowsプラットフォームサービス抽出プロンプト
+
+前提: R2完了（2026-07-20レビュー済み）。実装は `feature/rebuild-r3-platform` ブランチで行う（R2差分のコミット・PRが済んでいることをユーザーへ確認してから着手）。
 
 ```
-あなたはBeacon（WinUI 3再構築・独立リポジトリ）のPhase R1（技術スパイク）を担当する。
-目的は見た目ではなく、最も危険な技術要素の成立証明。使い捨てではなく後続Phaseの土台になる最小実装を書く。
+あなたはBeacon（WinUI 3再構築・独立リポジトリ）のPhase R3（Windowsプラットフォームサービス抽出）を担当する。
+目的はBeacon-oldからのUI非依存なWindows統合サービスの選択的移植と、WinUIを起動せずに
+アプリ検索・ファイル検索が動く状態の実現。UI実装はしない。
 
 ## リポジトリ配置
 - 本リポジトリ（作業対象）: C:\Users\ha.takaku\Desktop\Project\Beacon
 - Beacon-old（参照のみ・変更禁止）: C:\Users\ha.takaku\Desktop\Project\Beacon-old
 
 ## 読むべき文書（この順で）
-1. docs/rebuild/LESSONS.md（必読）
+1. docs/rebuild/LESSONS.md（必読。環境系はLESSONS-archive.mdの一行要約も有効）
 2. AGENTS.md
-3. docs/rebuild/PLAN.md の Phase R1 / ARCHITECTURE.md / adr/ADR-0001〜0004 / DISTRIBUTION.md
-4. docs/rebuild/AUDIT.md（R0完成版）
+3. docs/rebuild/ARCHITECTURE.md §1・§5 / adr/ADR-0001 / adr/ADR-0004
+4. docs/rebuild/AUDIT.md §A3・§A10・§A12（移植対象ファイルの確定リスト）
+5. docs/rebuild/DEPENDENCY_MAP.md B1・B2・B4 / docs/rebuild/PLAN.md の Phase R3
 
 ## 対象範囲
-1. 新規 Beacon.sln を作成し、最小プロジェクトを src/ と tests/ に生成:
-   - src/Beacon.WinUI（WinUI 3, Unpackaged, AssemblyName=Beacon.Next）
-   - src/Beacon.PluginHost（コンソールexe。ダミー: SearchRequestを受けて固定のSearchResultDtoを逐次返す）
-   - src/Beacon.Contracts（スパイク用最小DTO: SearchRequest/SearchResultDto/ContractVersionのみ。本設計はR2）
-   - src/Beacon.Distribution（publish + ZIP生成スクリプト初版。DISTRIBUTION.md §1の構造）
-   ※図に合わせるためだけのCore/Platform.Windows等の空プロジェクトは作らない
-2. Windows App SDK: Microsoft公式の安定版を選定し、バージョン・最小Windows・ライセンス原文確認結果・既知問題を docs/rebuild/adr/ADR-0002-portable-distribution.md の表へ追記する
-3. 検証項目（それぞれ結果を docs/rebuild/R1_REPORT.md へ記録）:
-   - Unpackaged + Self-contained publish（win-x64）
-   - ZIP展開→Beacon.Next.exe直接起動（可能ならクリーンVM/サンドボックスで。不能なら手順を書きユーザーへ依頼）
-   - 非表示起動 → グローバルホットキー（開発用Alt+Shift+Space、RegisterHotKey方式）でAppWindow表示
-   - トレイアイコン表示・コンテキストメニューから表示/終了（CsWin32自前実装を第一候補。パッケージを足す場合は寛容ライセンス原文確認+DEPENDENCY_MAP.md B1更新が条件）
-   - 単一インスタンス（Mutex+NamedPipe。識別子は .Next サフィックスで旧版と衝突させない）
-   - Beacon.PluginHost.exe を同一フォルダから起動し、JSON-RPC over Named Pipe（第一候補StreamJsonRpc・MIT原文確認）で検索要求→逐次結果→キャンセルの往復
-   - exe隣接 Data\ への設定・ログ読み書き（ADR-0004の解決規則: portable.flag判定 / flag消失+Data残存の提示 / 読み取り専用での明確な失敗）
-   - フォルダ移動後の再起動
-   - ダミー更新: 新ZIP展開差し替え→ロールバックの手動手順確認
-   - 旧WPF版Beacon（Beacon-oldビルド）との並行起動
-4. 将来MSIX化を阻害しないかの確認（メモをR1_REPORTへ）
+
+### 1. Beacon.Platform.Windows 新設（src/Beacon.Platform.Windows）
+- TFM: WinRT API（UWPパッケージ列挙等）が必要なら Beacon.WinUI と同じ net9.0-windows10.0.xxxx、
+  不要なら net9.0-windows。UseWPF / UseWindowsForms / WinUI参照は一切入れない
+- 参照は Beacon.Contracts（必要なら Beacon.Core も可。ARCHITECTURE §1の参照方向を守る）
+- Microsoft.Windows.CsWin32 を採用（DEPENDENCY_MAP B部で採用予定済み）。追加前に
+  DEPENDENCY_MAP.md B1へバージョン・MITライセンス原文確認・配布影響
+  （ソースジェネレータでありランタイムDLLは配布物へ入らない）を記載する
+- Beacon.sln へ追加。tests/Beacon.Platform.Windows.Tests も新設（NUnit・using NUnit.Framework明示）
+
+### 2. DataRootResolverのCore移設（ADR-0004）
+- src/Beacon.WinUI/DataRootResolver.cs の DataRootResolver / DataRootResolution /
+  DataRootResolutionException を src/Beacon.Core へ移設（namespace Beacon.Core。挙動は変えない）
+- R1Storage（スパイク用ログ・設定書き込み）はWinUI側へ残す。WinUIはCore参照で追随
+- tests/Beacon.R1.Tests のDataRootResolverテストを tests/Beacon.Core.Tests へ移設し、R1.Tests側から削除
+
+### 3. Everything移植（AUDIT §A12「再利用候補」の列挙ファイル）
+- Plugins/Flow.Launcher.Plugin.Explorer/Search/Everything/ の EverythingApiDllImport.cs・
+  EverythingAPI.cs・EverythingSearchOption.cs・EverythingSortOption.cs・Exceptions/* を
+  Beacon.Platform.Windows へ移植。EverythingSearchManager.cs は結果を SearchResultDto
+  （Kind=File/Folder、Icon=IconDescriptor）で返すようアダプト。キャンセル契約（CancellationToken）を維持
+- 各移植ファイル先頭に由来コメント（Beacon-old内パス・Flow Launcher/Wox由来）を付け、
+  MIT著作権表記を維持。attribution.md を更新
+- EverythingSDK x64 の Everything.dll を配布へ同梱（Build-Portable.ps1でZIPへ含める。x86は同梱しない）
+- Everything未導入・サービス未起動時は例外で落とさず「空結果+理由をログ」で退避する
+- EverythingDownloadHelper.cs / Droplex は移植しない（廃止判定済み）
+
+### 4. アプリ検索（Programのアダプト）
+- Plugins/Flow.Launcher.Plugin.Program/Programs/ の Win32.cs・UWPPackage.cs・IProgram.cs・
+  ShellLinkReader.cs・ShellLinkReadResult.cs・ShellLocalization.cs から、WPF Input/BitmapImage・
+  WinForms依存を除去して列挙・ShellLink処理を移植
+- ISearchProvider実装（例: AppSearchProvider。ResultKind.Application、Icon=IconDescriptor(FileShellIcon,...)）
+  として Beacon.Core の QueryOrchestrator に接続できる形にする
+
+### 5. ファイル検索プロバイダー
+- Everything経由の FileSearchProvider（ISearchProvider実装）
+- Everything不可時のfallbackとしてWindows Index検索を移植する場合、System.Data.OleDb等の
+  新規依存が必要になる。追加前にDEPENDENCY_MAP.md B1へ必要性・ライセンス原文・バージョン・
+  配布影響を記載すること。原文確認ができない依存が必要なら実装せず報告する
+  （fallback未実装でもR3完了条件は満たせる。その場合は未実装と理由を報告に明記）
+
+### 6. Shellアイコン・サムネイル
+- Flow.Launcher.Infrastructure/Image/ImageLoader.cs・ThumbnailReader.cs から
+  Shell取得ロジックだけをアダプト。出力は IconDescriptor（FileShellIcon / FileThumbnail）または
+  ファイルパス・data URI。System.Windows.Media.ImageSource を返すコードを持ち込まない
+- System.Drawing.Common は採用しない（B2で不採用済み。Shell API / CsWin32経路で実装）
+
+### 7. Win32統合サービス（AUDIT §A10の分割アダプト）
+- Flow.Launcher.Infrastructure/Win32Helper.cs から HWND/CsWin32ベース部分だけをサービス別に移植:
+  プロセス起動 / ファイル操作（開く・フォルダで表示） / Active Window判定 / Explorerの現在パス取得 /
+  クリップボード（テキストget/set）
+- WPF Window / Visual / HwndSource を引数・戻り値に持つAPIは移植しない（ファイル全体コピー禁止）
+- DialogJump系は保留判定のまま移植しない
+
+### 8. コンソールハーネス
+- WinUIを起動せずアプリ検索・ファイル検索を実行できる最小のConsoleプロジェクト
+  （例: src/Beacon.Platform.Windows.DevHarness。Beacon.slnへ追加、配布ZIPへは含めない）
+- 標準入力のクエリで QueryOrchestrator + 各Providerの逐次結果を表示できること
+
+### 9. 検証の拡張
+- Test-NoUiReferences.ps1 の検査対象へ src/Beacon.Platform.Windows を追加
+  （パターンは既存と同じ。net9.0-windows TFM自体は違反ではない。誤検知が出たらパターン側を報告）
+- 環境依存テスト（Everything実機・Windows Index）は自動実行から分離（[Explicit]または
+  環境検出スキップ）し、CIを不安定にしない。ロジック部分はfake/一時ディレクトリでテストする
 
 ## 非対象範囲（やらない）
-- 検索UI・デザイン実装（ピルバー等はR4）
-- 実プラグインのロード（ダミーのみ）
-- Beacon-oldからのコード移植（R2以降。今回は新規記述のみ）
-- 自動更新の本実装
+- UI実装・DesignTokens（R4）/ ランキング・履歴・使用統計（R6）
+- Calculator・URL・WebSearch・Bookmarkプロバイダー（R6）
+- PluginHost本実装・実プラグインロード（R7）/ DialogJump（保留）
+- トレイ・ホットキー・単一インスタンスの再実装（R1スパイクを維持）
+- Everything/ランタイムの自動ダウンロード（Droplex系は廃止）
 
 ## 変更可能ファイル
-Beacon.sln(新規), src/(新規), tests/(新規), docs/rebuild/R1_REPORT.md(新規),
-adr/ADR-0002(表の追記), DEPENDENCY_MAP.md(B1/B3の更新), attribution.md / LICENSE(依存追加時), LESSONS.md(失敗時)
+src/Beacon.Platform.Windows/**(新規), src/Beacon.Platform.Windows.DevHarness/**(新規),
+tests/Beacon.Platform.Windows.Tests/**(新規), src/Beacon.Core/**(DataRootResolver受け入れ),
+tests/Beacon.Core.Tests/**, tests/Beacon.R1.Tests/**(DataRootテスト削除のみ),
+src/Beacon.WinUI/(DataRootResolver移設への追随に必要な最小限), Beacon.sln,
+src/Beacon.Distribution/(Everything.dll同梱とテスト対象追加), .github/workflows/portable-smoke.yml,
+docs/rebuild/DEPENDENCY_MAP.md(B1追記), attribution.md, docs/rebuild/LESSONS.md(失敗時)
 
 ## 禁止事項
-- `Spotlight` という語（識別子・XAML・ログ・リソースキー・UI文字列すべて）
-- WPF/WinForms参照を Beacon.WinUI / Beacon.Contracts へ追加すること
-- iNKORE由来のコード・スタイル・素材のコピー
-- ライセンス未確認のパッケージ・素材の追加
-- Beacon-old側の変更
+- `Spotlight` という語（識別子・ログ・文字列・ファイル名すべて）
+- Contracts / Core / Platform.Windows へのWPF・WinUI・WinForms参照
+- System.Windows.Media.ImageSource 等のUI型を返すAPIの移植
+- DEPENDENCY_MAP.md B1へ記載する前の新規NuGet追加 / ライセンス原文未確認の依存追加
+- Beacon-old側の変更 / iNKORE由来物・SegoeFluentIcons.ttf の移植
 
-## ビルド／テスト
-- dotnet build Beacon.sln 0エラー / DataRoot解決規則の単体テスト（tests/Beacon.Core.Tests相当はまだ無いのでContracts隣接でよい）
-- publish→ZIP→展開→起動のスモーク手順をスクリプト化（Beacon.Distribution）
-- 起動確認は「プロセス残存 + <BeaconRoot>\Data\Logs にERRORなし + ホットキーで表示」
+## ビルド／検証（この順で全部やる）
+1. dotnet build Beacon.sln -c Release で0警告・0エラー
+2. dotnet test Beacon.sln -c Release で全テスト成功（環境依存テストは自動スキップでよい）
+3. Test-NoUiReferences.ps1（Platform.Windows追加後）がローカルで0件
+4. Build-Portable.ps1 → Test-Portable.ps1（既定）→ Test-Portable.ps1 -UseActivationPipe が通ること
+5. ZIP内に Everything.dll(x64) が含まれ、iNKORE・System.Drawing.Common・WPF系DLLが含まれないこと
+6. DevHarnessでアプリ検索・ファイル検索を手動確認（Everythingあり・なしの両方。なし側は空結果+理由ログ）
+7. スモーク後にBeacon.Nextプロセスが残っていないこと
 
-## 成果物・完了条件（PLAN.md Phase R1と同一）
-- クリーン環境でZIP展開後にBeacon.Next.exeが起動（Runtime事前導入なし）
-- PluginHostダミーとのRPC往復・キャンセルが動く
-- ホットキー表示・トレイ表示/終了が動く
-- Data\への保存・フォルダ移動後起動・読み取り専用での明確な失敗
-- 旧WPF版と並行起動できる
-- 成果物ZIPにiNKOREが含まれない（DLL一覧をR1_REPORTへ添付）
-- 各検証項目の成否がR1_REPORT.mdに記録されている（失敗も隠さず記録。Gate Aの判定材料）
+## 成果物・完了条件（PLAN.md Phase R3と同一）
+- コンソールハーネスまたはCoreテストでアプリ・ファイル検索が動く
+- Everythingあり・なし両方で動く（なし側はクラッシュせず退避）
+- WPFを起動せず結果を取得できる（IconDescriptor出力・ImageSource不使用）
+- 移植ファイル全件に由来コメントとMIT表記があり、attribution.mdが更新されている
 
 ## 失敗時
-docs/rebuild/LESSONS.md へ記録してから再試行。同じ失敗を繰り返さない。
-
-## ライセンス確認
-追加した全パッケージ（WinAppSDK含む）の原文確認結果を DEPENDENCY_MAP.md / attribution.md /（表示義務があれば）LICENSE へ反映する。
+docs/rebuild/LESSONS.md へ「事象・原因・再発防止」を記録してから再試行。同じ失敗を繰り返さない。
 
 ## Git差分要約
 変更・追加ファイル一覧と概要を報告する。コミットはユーザーが行う。

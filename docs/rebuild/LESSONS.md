@@ -19,6 +19,18 @@
 - ファイル上書き前にGitで現状確認し、`$ErrorActionPreference='Stop'`と生成文字列の検証を済ませてから1回だけ書く
 - push前に`git remote -v`でoriginを確認する
 
+## 2026-07-17: QueryOrchestratorの非キャンセル待機でCA2016
+
+- 事象: Phase R2のReleaseビルドで`WaitToReadAsync()`がCA2016により1エラーとなった。
+- 原因: 旧セッションを例外終了させずproducerのchannel完了まで読む設計で、意図的な`CancellationToken.None`を明示していなかった。
+- 再発防止: 非キャンセル待機には`CancellationToken.None`を明示し、Releaseビルドのanalyzerを実装チェックとして維持（Coreへ反映済み）。
+
+## 2026-07-17: Coreテストの固定期待値配列でCA1861
+
+- 事象: CA2016修正後のReleaseビルドで、到着順テストの`new[] { "fast", "slow" }`がCA1861により1エラーとなった。
+- 原因: 繰り返し評価されるNUnit制約へ固定配列を直接渡した。
+- 再発防止: 少数要素の順序確認は個別assertとし、不要なstatic配列を追加しない（Core.Testsへ反映済み）。
+
 記録形式（新しいものを上へ）:
 
 ```
@@ -56,6 +68,10 @@
 
 ## 2026-07-17: R1残課題の初回調査が環境・パス・パッチ引数で失敗
 
+- 再発: 2026-07-17（Phase R2のRPC追随でPowerShell複数行Replaceが改行表現不一致により一部未反映。直後の検索で検出し、全文置換または狭い正規表現へ切替）
+- 再発: 2026-07-17（Phase R2のapply_patchもfs sandbox helperの`CreateProcessWithLogonW failed: 5`で起動不能。承認済み外側実行で検証済み内容をファイル単位に反映）
+- 再発: 2026-07-17（Phase R2のARCHITECTURE節抽出でも`CreateProcessWithLogonW failed: 5`。以後の必読文書は必要に応じて承認済み個別読取で継続）
+- 再発: 2026-07-17（Phase R2の必読文書を一括読取した際に再び`CreateProcessWithLogonW failed: 5`。既存の再発防止どおり、承認済みの個別読取へ切替）
 - 再発: 2026-07-17（中断復帰確認で複数PowerShellの同時起動が再びCreateProcessWithLogonW failed: 5。さらにADR-0003の実名列挙前にパスを推測した。以後は個別実行し、ディレクトリ列挙後の実在パスだけを読む）
 - 再発: 2026-07-17（必読文書の一括読取と組み込みパッチが `CreateProcessWithLogonW failed: 5`、未列挙の `scripts` パス指定が不在、並列読取がtimeout、診断logger引数のセミコロンがPowerShellの文区切りとして解釈された。承認済み個別読取・実在パス・十分なtimeout・最小publishコマンドへ切替）
 - 事象: 初回の読み取りコマンドと組み込みパッチが `windows sandbox: CreateProcessWithLogonW failed: 5` で失敗した。昇格後は存在しないADR名を指定し、残存プロセスなしを終了コード1として扱った。さらにバッチラッパーへ複数行パッチを渡し `The last line of the patch must be '*** End Patch'` で拒否された。
