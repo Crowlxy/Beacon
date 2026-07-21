@@ -17,24 +17,54 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly string _dataRoot;
     private readonly AppWindow _appWindow;
     private readonly NativeWindowController _nativeWindow;
+    private readonly UsageHistoryStore _usageHistory;
+    private readonly ClipboardHistoryService _clipboardHistory;
     private bool _exiting;
 
     public MainWindow(string dataRoot)
     {
+        _dataRoot = dataRoot;
         _appSearchProvider = new AppSearchProvider();
-        _orchestrator = new QueryOrchestrator([_appSearchProvider, new FileSearchProvider(R1Storage.WriteLog), new CalculatorSearchProvider(), new UrlSearchProvider(), new WebSearchProvider()]);
+        _usageHistory = new UsageHistoryStore(dataRoot, R1Storage.WriteLog);
+        _usageHistory.Enabled = R1Storage.GetBoolean("PersonalizationEnabled", true);
+        _orchestrator = new QueryOrchestrator(
+            [
+                _appSearchProvider,
+                new FileSearchProvider(R1Storage.WriteLog),
+                new CalculatorSearchProvider(),
+                new UrlSearchProvider(),
+                new WebSearchProvider(),
+                new WindowsSettingsProvider(),
+                new BrowserBookmarkProvider(),
+                new SystemActionSearchProvider(),
+                new ShellSearchProvider(),
+                new ProcessKillerSearchProvider(),
+            ],
+            _usageHistory,
+            log: R1Storage.WriteLog);
         R1Storage.WriteLog("INFO MainWindow initialization started");
         InitializeComponent();
         ConfigureBackdrop();
         R1Storage.WriteLog("INFO MainWindow XAML initialized");
-        _dataRoot = dataRoot;
         var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         R1Storage.WriteLog("INFO MainWindow handle acquired");
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(windowHandle);
         _appWindow = AppWindow.GetFromWindowId(windowId);
         _appWindow.Closing += OnClosing;
         R1Storage.WriteLog("INFO AppWindow acquired");
-        _nativeWindow = new NativeWindowController(windowHandle, ShowLauncher, ExitApplication);
+        _clipboardHistory = new ClipboardHistoryService(windowHandle, dataRoot, R1Storage.WriteLog);
+        if (R1Storage.GetBoolean("ClipboardEnabled", false)) _clipboardHistory.SetEnabled(true);
+        _nativeWindow = new NativeWindowController(
+            windowHandle,
+            ShowLauncher,
+            RepositionLauncher,
+            ExitApplication,
+            () => _clipboardHistory.Enabled,
+            ToggleClipboardHistory,
+            () => _usageHistory.Enabled,
+            TogglePersonalization,
+            ResetPersonalization,
+            _clipboardHistory.OnClipboardUpdate);
         InitializeLauncher(windowHandle);
         R1Storage.WriteLog("INFO Hotkey and tray registered");
     }
@@ -155,14 +185,37 @@ public sealed partial class MainWindow : Window, IDisposable
     private void ExitApplication()
     {
         _exiting = true;
+        R1Storage.MarkCleanExit();
         Dispose();
         Close();
         Application.Current.Exit();
     }
 
+    private void ToggleClipboardHistory()
+    {
+        _clipboardHistory.SetEnabled(!_clipboardHistory.Enabled);
+        R1Storage.SetBoolean("ClipboardEnabled", _clipboardHistory.Enabled);
+        R1Storage.WriteLog($"INFO Clipboard history enabled={_clipboardHistory.Enabled}");
+    }
+
+    private void TogglePersonalization()
+    {
+        _usageHistory.Enabled = !_usageHistory.Enabled;
+        R1Storage.SetBoolean("PersonalizationEnabled", _usageHistory.Enabled);
+        R1Storage.WriteLog($"INFO Personalization enabled={_usageHistory.Enabled}");
+    }
+
+    private void ResetPersonalization()
+    {
+        if (NativeMethods.MessageBoxW(_windowHandle, "個人化データをすべて削除しますか？", "Beacon", NativeMethods.MessageBoxYesNoWarning) != NativeMethods.MessageBoxResultYes) return;
+        _usageHistory.Reset();
+        R1Storage.WriteLog("INFO Personalization data reset");
+    }
+
     public void Dispose()
     {
         _orchestrator.Dispose();
+        _clipboardHistory.Dispose();
         _appSearchProvider.Dispose();
         _nativeWindow.Dispose();
     }

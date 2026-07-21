@@ -19,7 +19,12 @@ internal sealed class ThinDesktopAcrylicBackdrop : SystemBackdrop, IDisposable
             throw new InvalidOperationException("This backdrop cannot be shared.");
         }
 
-        var controller = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
+        var controller = new DesktopAcrylicController
+        {
+            Kind = DesktopAcrylicKind.Thin,
+            TintOpacity = (float)(double)Application.Current.Resources["AcrylicTintOpacity"],
+            LuminosityOpacity = (float)(double)Application.Current.Resources["AcrylicLuminosityOpacity"],
+        };
         try
         {
             controller.SetSystemBackdropConfiguration(

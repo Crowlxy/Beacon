@@ -17,6 +17,7 @@ public sealed class FileSearchProvider(Action<string>? log = null) : ISearchProv
             string.IsNullOrWhiteSpace(request.RawQuery)) yield break;
 
         var availability = await EverythingApi.GetAvailabilityAsync(cancellationToken);
+        if (availability.Available) log?.Invoke("INFO File search route: Everything");
         var search = availability.Available
             ? new EverythingSearchManager(log).SearchAsync(request.RawQuery, availabilityConfirmed: true, cancellationToken: cancellationToken)
             : new WindowsIndexSearch(log).SearchAsync(request.RawQuery, cancellationToken);

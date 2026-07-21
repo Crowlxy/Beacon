@@ -11,6 +11,7 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="{StaticResource SearchBarGridHeight}" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid Padding="{StaticResource SearchPadding}">
@@ -25,21 +26,53 @@
                     Background="{StaticResource TransparentBrush}"
                     BorderBrush="{StaticResource TransparentBrush}"
                     BorderThickness="{StaticResource QueryBoxBorderThickness}"
-                    Padding="{StaticResource QueryBoxPadding}"
+                    Padding="{StaticResource SearchTextPadding}"
                     FontSize="{StaticResource SearchFontSize}"
+                    FontFamily="{StaticResource LauncherFontFamily}"
                     Foreground="{ThemeResource LauncherTextBrush}"
-                    PlaceholderForeground="{ThemeResource LauncherPlaceholderBrush}"
-                    PlaceholderText="Beaconで検索"
                     VerticalAlignment="Center"
-                    VerticalContentAlignment="Center"
                     TextChanged="OnQueryTextChanged"
                     TextCompositionStarted="OnCompositionStarted"
                     TextCompositionEnded="OnCompositionEnded"
                     KeyDown="OnQueryKeyDown" />
+                <TextBlock
+                    x:Name="QueryPlaceholder"
+                    Grid.Column="1"
+                    FontSize="{StaticResource SearchFontSize}"
+                    FontFamily="{StaticResource LauncherFontFamily}"
+                    Foreground="{ThemeResource LauncherPlaceholderBrush}"
+                    Text="Anything..."
+                    Margin="{StaticResource SearchPlaceholderPadding}"
+                    VerticalAlignment="Center"
+                    IsHitTestVisible="False" />
+                <TextBlock
+                    x:Name="GhostCompletion"
+                    Grid.Column="1"
+                    HorizontalAlignment="Right"
+                    FontFamily="{StaticResource QuickKeyFontFamily}"
+                    FontSize="{StaticResource CategoryChipFontSize}"
+                    Foreground="{ThemeResource LauncherPlaceholderBrush}"
+                    VerticalAlignment="Center"
+                    IsHitTestVisible="False" />
             </Grid>
+            <Border
+                x:Name="ScopeChip"
+                Grid.Row="1"
+                Height="{StaticResource CategoryChipHeight}"
+                HorizontalAlignment="Left"
+                Margin="{StaticResource CategoryChipRowMargin}"
+                Padding="{StaticResource CategoryChipPadding}"
+                CornerRadius="{StaticResource CategoryChipCornerRadius}"
+                Background="{StaticResource CategoryChipBrush}"
+                Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="ScopeChipText" FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource CategoryChipFontSize}" VerticalAlignment="Center" />
+                    <Button Content="×" Click="OnScopeChipClose" Background="{StaticResource TransparentBrush}" BorderThickness="{StaticResource QueryBoxBorderThickness}" Padding="{StaticResource QueryBoxPadding}" />
+                </StackPanel>
+            </Border>
             <ListView
                 x:Name="ResultsList"
-                Grid.Row="1"
+                Grid.Row="2"
                 Margin="{StaticResource ResultsMargin}"
                 IsItemClickEnabled="True"
                 ItemClick="OnResultClicked"
@@ -51,7 +84,6 @@
                         <Setter Property="Margin" Value="{StaticResource ResultItemMargin}" />
                         <Setter Property="Padding" Value="{StaticResource QueryBoxPadding}" />
                         <Setter Property="BorderThickness" Value="{StaticResource QueryBoxBorderThickness}" />
-                        <Setter Property="CornerRadius" Value="{StaticResource ResultSelectionCornerRadius}" />
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
@@ -60,15 +92,21 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Grid Width="{StaticResource ResultIconSize}" Height="{StaticResource ResultIconSize}" Margin="{StaticResource ResultIconMargin}">
-                                <FontIcon FontFamily="Segoe Fluent Icons" FontSize="{StaticResource ResultIconSize}" Glyph="{Binding Glyph}" Visibility="{Binding GlyphVisibility}" />
-                                <Image Source="{Binding Image}" Stretch="Uniform" Visibility="{Binding ImageVisibility}" />
-                            </Grid>
+                            <Border Width="{StaticResource ResultIconSize}" Height="{StaticResource ResultIconSize}" Margin="{StaticResource ResultIconMargin}" CornerRadius="{StaticResource ResultIconCornerRadius}">
+                                <Grid>
+                                    <FontIcon FontFamily="Segoe Fluent Icons" FontSize="{StaticResource ResultIconSize}" Glyph="{Binding Glyph}" Visibility="{Binding GlyphVisibility}" />
+                                    <Image Source="{Binding Image}" Stretch="Uniform" Visibility="{Binding ImageVisibility}" />
+                                </Grid>
+                            </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock FontSize="{StaticResource ResultTitleSize}" Text="{Binding Result.Title}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock FontSize="{StaticResource ResultSubtitleSize}" Margin="{StaticResource ResultSubtitleMargin}" Opacity="{StaticResource ResultSubtitleOpacity}" Text="{Binding Result.Subtitle}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock FontFamily="{StaticResource LauncherBoldFontFamily}" FontSize="{StaticResource ResultTitleSize}" Text="{Binding Result.Title}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultSubtitleSize}" Margin="{StaticResource ResultSubtitleMargin}" Opacity="{StaticResource ResultSubtitleOpacity}" Text="{Binding Result.Subtitle}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
+                            <Border Grid.Column="2" Background="{StaticResource QuickKeyBrush}" CornerRadius="{StaticResource CategoryChipCornerRadius}" Padding="{StaticResource QuickKeyPadding}" Margin="{StaticResource QuickKeyMargin}" VerticalAlignment="Center" Visibility="{Binding QuickKeyVisibility}">
+                                <TextBlock FontFamily="{StaticResource QuickKeyFontFamily}" FontSize="{StaticResource CategoryChipFontSize}" Text="{Binding QuickKey}" />
+                            </Border>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>

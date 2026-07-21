@@ -1,7 +1,7 @@
 # PROMPTS — Codex実装プロンプト
 
 運用: ユーザーが本リポジトリ（`C:\Users\ha.takaku\Desktop\Project\Beacon`）を作業ディレクトリとしてCodexを**対話モードで**実行し、以下のプロンプト本文を渡す（モデル: gpt-5.6-sol）。ヘッドレスの `codex exec` はこの環境ではサンドボックス制限で失敗するため使わない（LESSONS-archive.md 2026-07-16）。
-**本ファイルには現行フェーズのプロンプトのみ置く。** 現行は **R4.4（Gate B再々差し戻し修正）→ 合格後に統合R5**（旧R5・R6・R8の統合。旧R7=第三者プラグイン対応は実装対象外。2026-07-20ユーザー決定）。R3は2026-07-20完了。R4はR4.1〜R4.3を経てもGate B不合格。R4.3でアクリル(B-2)は解決したが、枠(B-1)はコード順序の見落としで再発（2026-07-20レビュー）。完了フェーズのプロンプト本文は削除済み。
+**本ファイルには現行フェーズのプロンプトのみ置く。** 現行は **統合R5**（旧R5・R6・R8の統合。旧R7=第三者プラグイン対応は実装対象外。2026-07-20ユーザー決定）。R3は2026-07-20完了。R4はR4.1〜R4.3を経てR4.3でGate B承認（2026-07-21ユーザー承認。B-1の枠再発はR4.4での修正を待たずユーザー確認によりクローズ）。R4.4は未着手のまま不要化。完了フェーズのプロンプト本文は削除済み。
 
 ---
 
@@ -70,56 +70,7 @@
 Phase R4プロンプトと同一（AGENTS.md固定ルール優先。コミットはユーザーが行う）。
 ```
 
-**結果（2026-07-20レビュー）**: B-2（アクリル）は解決。B-1（枠）は再発 — 実装自体（DWMWA_BORDER_COLOR=NONE設定）は正しく入ったが、`MainWindow.R4.cs`の`InitializeLauncher`で適用順序が誤っていた。R4.4で順序のみ修正する。
-
----
-
-## Phase R4.4: Gate B再々差し戻し修正（DWM枠の適用順序）
-
-前提: R4.3実装済みの現ツリーに対する差分修正。B-2（アクリル）はR4.3で解決済みのため触らない。**統合R5より先に完了させる。**
-
-```
-あなたはBeacon（WinUI 3 Portable-firstランチャー）の実装担当。R4.3はGate Bレビューで
-再々差し戻しになった。アクリル（B-2）は解決済みだが、ウィンドウ枠（B-1）が再発した。
-原因は静的レビューで特定済みなので、以下を最小差分で修正する。
-
-## 原因
-`src/Beacon.WinUI/MainWindow.R4.cs` の `InitializeLauncher` で、
-`NativeMethods.ApplyWindowFrameStyle(windowHandle)`（DWM角丸+ボーダー色NONE適用）が、
-`ExtendsContentIntoTitleBar = true` / `SetTitleBar(Panel)` /
-`presenter.SetBorderAndTitleBar(false, false)` より **先に** 呼ばれている。
-`SetBorderAndTitleBar` はウィンドウスタイル（WS_CAPTION等）を書き換えてDWMにフレーム再計算を
-強制するため、事前に設定したボーダー色NONEがシステム既定へ巻き戻る。
-`WM_DWMCOMPOSITIONCHANGED` での再適用はこの経路では発火しないため救済されない。
-
-## 修正
-`InitializeLauncher` 内で `NativeMethods.ApplyWindowFrameStyle(windowHandle)` の呼び出しを、
-`presenter` ブロック（`SetBorderAndTitleBar` / `IsResizable` / `IsMaximizable` /
-`IsMinimizable` / `IsAlwaysOnTop` の設定）より **後** に移動する。
-`ResizeForResults(0)` より前であればよい。ログ文言・エラーハンドリングの構造は変えない。
-他のロジック（アクリル・ティント・リサイズ・検索）には一切触れない。
-
-## 検証
-1. dotnet build Beacon.sln -c Release で0警告・0エラー
-2. dotnet test Beacon.sln -c Release で全テスト成功
-3. Test-NoUiReferences.ps1 が0件
-4. Build-Portable.ps1 → Test-Portable.ps1（既定）→ -UseActivationPipe
-5. Portable展開物で手動確認し、以下を報告する:
-   - Light/Dark × 未入力/展開 の4枚スクリーンショット（柄のある壁紙の上で）
-   - ウィンドウ外周に線・枠が見えないこと（明るい壁紙と暗い壁紙の両方で確認）
-   - アクリルの透け具合がR4.3から変わっていないこと（退行確認）
-6. 日本語IME・Esc/フォーカス喪失・ホットキー再表示・DPI 100〜200%がR4.3から
-   退行していないこと（簡易確認でよい。項目別に報告）
-7. スモーク後にBeacon.Next系プロセスが残っていないこと
-
-## 完了条件
-- ウィンドウ外周にシステムボーダー線が見えない（パネル自身の1px輪郭のみ）
-- アクリルの透け具合がR4.3のまま維持されている
-- 仕様値・依存の変更なし、R4の自動検証がすべてグリーン
-
-## 失敗時・Git差分要約
-Phase R4プロンプトと同一（AGENTS.md固定ルール優先。コミットはユーザーが行う）。
-```
+**結果（2026-07-20レビュー→2026-07-21ユーザー承認）**: B-2（アクリル）は解決。B-1（枠）は静的レビューでは再発指摘（`InitializeLauncher`内の適用順序）していたが、2026-07-21にユーザーが実機確認のうえR4.3をGate B合格と判定。原因究明済みのR4.4修正案（`ApplyWindowFrameStyle`呼び出しをpresenterブロックより後へ移動）は未実施のまま不要化 — 枠の再発が実運用上問題にならないと判断されたため。将来、枠の見え方が再度問題化した場合はこのプロンプト案（原因: `SetBorderAndTitleBar`によるDWMフレーム再計算でボーダー色NONE設定が巻き戻る）をLESSONS.mdの記録基準に従って再利用できる。
 
 ---
 mm

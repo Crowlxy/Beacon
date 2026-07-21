@@ -6,7 +6,7 @@
             <SolidColorBrush x:Key="LauncherFallbackBrush" Color="#CCF7F7F7" />
             <SolidColorBrush x:Key="LauncherTintBrush" Color="#40FFFFFF" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#1A000000" />
-            <SolidColorBrush x:Key="LauncherTextBrush" Color="#E6000000" />
+            <SolidColorBrush x:Key="LauncherTextBrush" Color="#1D1D1F" />
             <SolidColorBrush x:Key="LauncherPlaceholderBrush" Color="#7A000000" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#16000000" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#1C000000" />
@@ -41,37 +41,53 @@
     <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
     <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent" />
-    <x:Double x:Key="LauncherWidth">680</x:Double>
-    <x:Double x:Key="SearchBarHeight">64</x:Double>
-    <GridLength x:Key="SearchBarGridHeight">64</GridLength>
-    <x:Double x:Key="SearchFontSize">22</x:Double>
+    <FontFamily x:Key="LauncherFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Regular.ttf#Zen Kaku Gothic New</FontFamily>
+    <FontFamily x:Key="LauncherBoldFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Bold.ttf#Zen Kaku Gothic New</FontFamily>
+    <FontFamily x:Key="QuickKeyFontFamily">ms-appx:///Assets/Fonts/InterVariable.ttf#Inter Variable</FontFamily>
+    <x:Double x:Key="LauncherWidth">560</x:Double>
+    <x:Double x:Key="SearchBarHeight">56</x:Double>
+    <GridLength x:Key="SearchBarGridHeight">56</GridLength>
+    <x:Double x:Key="SearchFontSize">16</x:Double>
     <x:Double x:Key="SearchIconSize">22</x:Double>
     <CornerRadius x:Key="SearchBarCornerRadius">32</CornerRadius>
     <CornerRadius x:Key="ExpandedPanelCornerRadius">24</CornerRadius>
     <CornerRadius x:Key="ResultSelectionCornerRadius">10</CornerRadius>
+    <CornerRadius x:Key="ResultIconCornerRadius">8</CornerRadius>
+    <CornerRadius x:Key="CategoryChipCornerRadius">14</CornerRadius>
+    <StaticResource x:Key="ListViewItemCornerRadius" ResourceKey="ResultSelectionCornerRadius" />
     <x:Double x:Key="ResultRowHeight">52</x:Double>
     <x:Double x:Key="ResultIconSize">32</x:Double>
     <x:Double x:Key="ResultTitleSize">16</x:Double>
     <x:Double x:Key="ResultSubtitleSize">12</x:Double>
     <x:Double x:Key="CategoryChipHeight">28</x:Double>
     <x:Double x:Key="CategoryChipFontSize">12</x:Double>
-    <x:Int32 x:Key="MaximumResultCount">8</x:Int32>
+    <x:Int32 x:Key="MaximumResultCount">7</x:Int32>
     <Duration x:Key="PanelAnimationDuration">0:0:0.18</Duration>
     <x:Double x:Key="PanelAnimationMilliseconds">280</x:Double>
     <x:Double x:Key="PanelAnimationDecay">5</x:Double>
     <x:Double x:Key="AnimationFrameMilliseconds">16</x:Double>
+    <x:Double x:Key="AcrylicTintOpacity">0.10</x:Double>
+    <x:Double x:Key="AcrylicLuminosityOpacity">0.20</x:Double>
     <x:Double x:Key="ResultsListVerticalSpace">16</x:Double>
     <x:Double x:Key="LauncherTopRatio">0.16</x:Double>
     <Thickness x:Key="PanelBorderThickness">1</Thickness>
     <Thickness x:Key="SearchPadding">24,0</Thickness>
     <Thickness x:Key="SearchIconMargin">0,0,16,0</Thickness>
     <Thickness x:Key="QueryBoxPadding">0</Thickness>
+    <Thickness x:Key="SearchTextPadding">0,4,0,0</Thickness>
+    <Thickness x:Key="SearchPlaceholderPadding">0,-3,0,0</Thickness>
     <Thickness x:Key="QueryBoxBorderThickness">0</Thickness>
     <Thickness x:Key="ResultsMargin">10,0,10,10</Thickness>
     <Thickness x:Key="ResultPadding">12,0</Thickness>
     <Thickness x:Key="ResultItemMargin">0,1</Thickness>
     <Thickness x:Key="ResultIconMargin">0,0,12,0</Thickness>
     <Thickness x:Key="ResultSubtitleMargin">0,2,0,0</Thickness>
+    <Thickness x:Key="CategoryChipRowMargin">24,0,24,6</Thickness>
+    <Thickness x:Key="CategoryChipPadding">10,0</Thickness>
+    <Thickness x:Key="QuickKeyPadding">8,2</Thickness>
+    <Thickness x:Key="QuickKeyMargin">8,0,0,0</Thickness>
+    <SolidColorBrush x:Key="CategoryChipBrush" Color="#18007AFF" />
+    <SolidColorBrush x:Key="QuickKeyBrush" Color="#14000000" />
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent" />
     <x:Double x:Key="ResultSubtitleOpacity">0.72</x:Double>
 </ResourceDictionary>

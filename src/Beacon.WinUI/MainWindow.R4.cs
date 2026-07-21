@@ -21,6 +21,8 @@ public sealed partial class MainWindow
     private readonly IconResolver _icons = new();
     private readonly UISettings _uiSettings = new();
     private bool _composing;
+    private string? _activeProcessName;
+    private string? _activeFolder;
     private nint _windowHandle;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _resizeTimer;
 
@@ -33,7 +35,6 @@ public sealed partial class MainWindow
         ResultsList.ItemsSource = _results;
         Activated += OnWindowActivated;
         ExtendsContentIntoTitleBar = true;
-        SetTitleBar(Panel);
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.SetBorderAndTitleBar(false, false);
@@ -48,10 +49,26 @@ public sealed partial class MainWindow
 
     private void ShowLauncherCore()
     {
+        var started = Stopwatch.GetTimestamp();
+        _activeProcessName = ActiveWindowService.GetProcessName();
+        _activeFolder = ExplorerPathService.GetCurrentPath();
         _ = RefreshAppCacheAsync();
+        _viewState.Reset();
         QueryBox.Text = string.Empty;
         ApplyResults([]);
         ResizeForResults(0);
+        RepositionLauncher();
+        NativeMethods.ShowWindow(_windowHandle, NativeMethods.ShowWindowCommand.Show);
+        Activate();
+        if (!NativeMethods.BringToForeground(_windowHandle))
+            R1Storage.WriteLog("WARN Foreground activation was limited by Windows");
+        DispatcherQueue.TryEnqueue(() => QueryBox.Focus(FocusState.Programmatic));
+        R1Storage.WriteLog($"PERF HotkeyToDisplayMs={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1}");
+        R1Storage.WriteLog("INFO Hotkey or activation pipe displayed the AppWindow");
+    }
+
+    private void RepositionLauncher()
+    {
         NativeMethods.GetCursorPos(out var cursor);
         var display = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest);
         var dpi = MonitorDpi(cursor);
@@ -63,10 +80,6 @@ public sealed partial class MainWindow
             width,
             height));
         ApplyWindowRegion(width, height, dpi);
-        NativeMethods.SetForegroundWindow(_windowHandle);
-        Activate();
-        DispatcherQueue.TryEnqueue(() => QueryBox.Focus(FocusState.Programmatic));
-        R1Storage.WriteLog("INFO Hotkey or activation pipe displayed the AppWindow");
     }
 
     private async Task RefreshAppCacheAsync()
@@ -86,11 +99,18 @@ public sealed partial class MainWindow
 
     private void OnQueryTextChanged(object sender, TextChangedEventArgs args)
     {
-        if (!_composing) StartSearch(QueryBox.Text);
+        QueryPlaceholder.Visibility = QueryBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateGhostCompletion(QueryBox.Text);
+        if (!_composing && _viewState.State != LauncherViewState.ActionInput) StartSearch(QueryBox.Text);
     }
 
     private void StartSearch(string query)
     {
+        if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory == BrowseCategory.Clipboard)
+        {
+            ApplyClipboardResults();
+            return;
+        }
         if (string.IsNullOrWhiteSpace(query))
         {
             _orchestrator.Cancel();
@@ -100,17 +120,29 @@ public sealed partial class MainWindow
         }
         ApplyResults([]);
         ResizeForResults(0);
-        _ = SearchAsync(query);
+        TryQuickKey(query, out var searchText, out _);
+        _ = SearchAsync(searchText, query);
     }
 
-    private async Task SearchAsync(string query)
+    private async Task SearchAsync(string query, string displayedQuery)
     {
+        var started = Stopwatch.GetTimestamp();
+        var firstResult = true;
         try
         {
             var pending = new List<SearchResultDto>();
-            await foreach (var result in _orchestrator.SearchAsync(query))
+            if (_queryScope?.IsClipboard == true) { ApplyClipboardResults(); return; }
+            await foreach (var result in _orchestrator.SearchAsync(
+                               query,
+                               _queryScope?.ProviderScope ?? QueryScope.All,
+                               rankingContext: new RankingContext(DateTimeOffset.Now, _activeProcessName, _activeFolder, _usageHistory.Enabled)))
             {
-                if (!string.Equals(query, QueryBox.Text, StringComparison.Ordinal)) return;
+                if (!string.Equals(displayedQuery, QueryBox.Text, StringComparison.Ordinal)) return;
+                if (firstResult)
+                {
+                    firstResult = false;
+                    R1Storage.WriteLog($"PERF InputToFirstResultMs={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1}");
+                }
                 pending.RemoveAll(item => item.Id == result.Id);
                 pending.Add(result);
                 var visible = pending.OrderByDescending(item => item.Score)
@@ -165,11 +197,7 @@ public sealed partial class MainWindow
 
     private void OnQueryKeyDown(object sender, KeyRoutedEventArgs args)
     {
-        if (args.Key == VirtualKey.Escape)
-        {
-            _appWindow.Hide();
-            args.Handled = true;
-        }
+        if (HandleUxKey(args)) args.Handled = true;
         else if (args.Key is VirtualKey.Up or VirtualKey.Down)
         {
             if (_results.Count == 0) return;
@@ -180,14 +208,14 @@ public sealed partial class MainWindow
         }
         else if (args.Key == VirtualKey.Enter && !_composing && ResultsList.SelectedItem is ResultRow row)
         {
-            Execute(row.Result);
+            HandleEnter(row);
             args.Handled = true;
         }
     }
 
     private void OnResultClicked(object sender, ItemClickEventArgs args)
     {
-        if (args.ClickedItem is ResultRow row) Execute(row.Result);
+        if (args.ClickedItem is ResultRow row) HandleEnter(row);
     }
 
     private void Execute(SearchResultDto result)
@@ -203,9 +231,18 @@ public sealed partial class MainWindow
         }
         try
         {
-            if (result.Kind == ResultKind.Calculation) ClipboardTextService.Set(result.CopyText ?? result.ExecutionToken);
+            if (result.ProviderId == SystemActionSearchProvider.Id)
+            {
+                if (SystemActionService.RequiresConfirmation(result.ExecutionToken) && !_systemActionConfirmed) return;
+                _systemActionConfirmed = false;
+                SystemActionService.Execute(result.ExecutionToken);
+            }
+            else if (result.ProviderId == ShellSearchProvider.Id) ShellExecutionService.Run(result.ExecutionToken, _activeFolder);
+            else if (result.ProviderId == ProcessKillerSearchProvider.Id) ProcessTerminationService.Terminate(result.ExecutionToken);
+            else if (result.Kind == ResultKind.Calculation) ClipboardTextService.Set(result.CopyText ?? result.ExecutionToken);
             else if (result.Kind == ResultKind.Folder) FileOperationService.Open(result.FilePath ?? result.ExecutionToken);
             else ProcessLaunchService.Start(result.FilePath ?? result.ExecutionToken);
+            _usageHistory.Record(result.Id, _activeProcessName, "Search");
             _appWindow.Hide();
         }
         catch (Exception exception) { R1Storage.WriteLog($"ERROR Execute failed: {exception.Message}"); }
@@ -220,6 +257,7 @@ public sealed partial class MainWindow
         var width = Pixels(Token("LauncherWidth"), dpi);
         var targetDip = LauncherHeight.Calculate(Token("SearchBarHeight"), Token("ResultRowHeight"),
             Token("ResultsListVerticalSpace"), visibleCount, (int)Application.Current.Resources["MaximumResultCount"]);
+        if (ScopeChip.Visibility == Visibility.Visible) targetDip += Token("CategoryChipHeight");
         AnimateResize(width, Pixels(targetDip, dpi));
     }
 
@@ -282,6 +320,8 @@ public sealed class ResultRow : System.ComponentModel.INotifyPropertyChanged
     public Microsoft.UI.Xaml.Media.ImageSource? Image { get; private set; }
     public Visibility GlyphVisibility => Image is null ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ImageVisibility => Image is null ? Visibility.Collapsed : Visibility.Visible;
+    public string? QuickKey => !string.IsNullOrWhiteSpace(Result.FilePath) ? (Result.Kind == ResultKind.Folder ? "term" : "rf") : null;
+    public Visibility QuickKeyVisibility => QuickKey is null ? Visibility.Collapsed : Visibility.Visible;
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
     public bool Update(SearchResultDto result)
@@ -290,6 +330,8 @@ public sealed class ResultRow : System.ComponentModel.INotifyPropertyChanged
         var iconChanged = Result.Icon != result.Icon;
         Result = result;
         PropertyChanged?.Invoke(this, new(nameof(Result)));
+        PropertyChanged?.Invoke(this, new(nameof(QuickKey)));
+        PropertyChanged?.Invoke(this, new(nameof(QuickKeyVisibility)));
         if (iconChanged)
         {
             Image = null;

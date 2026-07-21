@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Beacon.Platform.Windows;
 
 namespace Beacon.WinUI;
 
@@ -8,12 +9,21 @@ internal sealed class NativeWindowController : IDisposable
     private const int WindowProcedureIndex = -4;
     private const uint HotkeyMessage = 0x0312;
     private const uint DwmCompositionChangedMessage = 0x031E;
+    private const uint DisplayChangeMessage = 0x007E;
+    private const uint DpiChangedMessage = 0x02E0;
+    private const uint PowerBroadcastMessage = 0x0218;
+    private const uint ClipboardUpdateMessage = 0x031D;
+    private const uint ResumeAutomatic = 0x0012;
     private const uint TrayMessage = 0x8001;
     private const uint LeftButtonUp = 0x0202;
     private const uint RightButtonUp = 0x0205;
     private const uint HotkeyId = 0xB001;
     private const uint ShowMenuId = 1;
-    private const uint ExitMenuId = 2;
+    private const uint StartupMenuId = 2;
+    private const uint ClipboardMenuId = 3;
+    private const uint PersonalizationMenuId = 4;
+    private const uint PersonalizationResetMenuId = 5;
+    private const uint ExitMenuId = 6;
     private const uint NotifyIconAdd = 0;
     private const uint NotifyIconDelete = 2;
     private const uint NotifyIconSetVersion = 4;
@@ -22,6 +32,9 @@ internal sealed class NativeWindowController : IDisposable
     private const uint NotifyIconTip = 4;
     private const uint NotifyIconVersion4 = 4;
     private const uint MenuString = 0;
+    private const uint MenuChecked = 0x0008;
+    private const uint MenuDisabled = 0x0002;
+    private const uint MenuSeparator = 0x0800;
     private const uint TrackReturnCommand = 0x0100;
     private const uint ModifierAlt = 0x0001;
     private const uint ModifierShift = 0x0004;
@@ -31,17 +44,41 @@ internal sealed class NativeWindowController : IDisposable
 
     private readonly IntPtr _windowHandle;
     private readonly Action _show;
+    private readonly Action _reposition;
     private readonly Action _exit;
+    private readonly Func<bool> _clipboardEnabled;
+    private readonly Action _toggleClipboard;
+    private readonly Func<bool> _personalizationEnabled;
+    private readonly Action _togglePersonalization;
+    private readonly Action _resetPersonalization;
+    private readonly Action _clipboardUpdated;
     private readonly NativeMethods.WindowProcedure _windowProcedure;
     private readonly IntPtr _previousWindowProcedure;
     private NativeMethods.NotifyIconData _notifyIconData;
     private bool _disposed;
 
-    public NativeWindowController(IntPtr windowHandle, Action show, Action exit)
+    public NativeWindowController(
+        IntPtr windowHandle,
+        Action show,
+        Action reposition,
+        Action exit,
+        Func<bool> clipboardEnabled,
+        Action toggleClipboard,
+        Func<bool> personalizationEnabled,
+        Action togglePersonalization,
+        Action resetPersonalization,
+        Action clipboardUpdated)
     {
         _windowHandle = windowHandle;
         _show = show;
+        _reposition = reposition;
         _exit = exit;
+        _clipboardEnabled = clipboardEnabled;
+        _toggleClipboard = toggleClipboard;
+        _personalizationEnabled = personalizationEnabled;
+        _togglePersonalization = togglePersonalization;
+        _resetPersonalization = resetPersonalization;
+        _clipboardUpdated = clipboardUpdated;
         _windowProcedure = WindowProcedure;
         _previousWindowProcedure = NativeMethods.SetWindowLongPtrW(
             windowHandle,
@@ -96,6 +133,12 @@ internal sealed class NativeWindowController : IDisposable
             return IntPtr.Zero;
         }
 
+        if (message is DisplayChangeMessage or DpiChangedMessage ||
+            (message == PowerBroadcastMessage && unchecked((uint)wParam.ToInt64()) == ResumeAutomatic))
+        {
+            _reposition();
+        }
+
         if (message == TrayMessage)
         {
             var mouseMessage = unchecked((uint)lParam.ToInt64()) & 0xFFFF;
@@ -108,6 +151,12 @@ internal sealed class NativeWindowController : IDisposable
                 ShowContextMenu();
             }
 
+            return IntPtr.Zero;
+        }
+
+        if (message == ClipboardUpdateMessage)
+        {
+            _clipboardUpdated();
             return IntPtr.Zero;
         }
 
@@ -125,6 +174,12 @@ internal sealed class NativeWindowController : IDisposable
         try
         {
             NativeMethods.AppendMenuW(menu, MenuString, ShowMenuId, "Show Beacon");
+            var startupFlags = MenuString | (StartupRegistration.IsEnabled() ? MenuChecked : 0);
+            NativeMethods.AppendMenuW(menu, startupFlags, StartupMenuId, "スタートアップに登録");
+            NativeMethods.AppendMenuW(menu, MenuString | (_clipboardEnabled() ? MenuChecked : 0), ClipboardMenuId, "クリップボード履歴");
+            NativeMethods.AppendMenuW(menu, MenuString | (_personalizationEnabled() ? MenuChecked : 0), PersonalizationMenuId, "個人化");
+            NativeMethods.AppendMenuW(menu, MenuString, PersonalizationResetMenuId, "個人化をリセット");
+            NativeMethods.AppendMenuW(menu, MenuSeparator, 0, string.Empty);
             NativeMethods.AppendMenuW(menu, MenuString, ExitMenuId, "Exit Beacon");
             NativeMethods.GetCursorPos(out var point);
             NativeMethods.SetForegroundWindow(_windowHandle);
@@ -143,6 +198,14 @@ internal sealed class NativeWindowController : IDisposable
             {
                 _exit();
             }
+            else if (command == StartupMenuId)
+            {
+                StartupRegistration.SetEnabled(!StartupRegistration.IsEnabled(), Environment.ProcessPath!);
+                R1Storage.WriteLog($"INFO Startup registration enabled={StartupRegistration.IsEnabled()}");
+            }
+            else if (command == ClipboardMenuId) _toggleClipboard();
+            else if (command == PersonalizationMenuId) _togglePersonalization();
+            else if (command == PersonalizationResetMenuId) _resetPersonalization();
         }
         finally
         {
@@ -183,7 +246,11 @@ internal static class NativeMethods
     private const int WindowStyleIndex = -16;
     private const long WindowDialogFrameStyle = 0x00400000L;
     private const uint FrameChangedFlags = 0x0037;
+    private const int WindowRegionTopInset = 1;
     public const uint MessageBoxIconError = 0x00000010;
+    public const uint MessageBoxYesNoWarning = 0x00000004 | 0x00000030;
+    public const int MessageBoxResultYes = 6;
+    internal enum ShowWindowCommand { Show = 5 }
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     internal delegate IntPtr WindowProcedure(IntPtr windowHandle, uint message, IntPtr wParam, IntPtr lParam);
@@ -225,7 +292,7 @@ internal static class NativeMethods
 
     internal static bool ApplyRoundedRegion(IntPtr windowHandle, int width, int height, int radius)
     {
-        var region = CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2);
+        var region = CreateRoundRectRgn(0, WindowRegionTopInset, width, height, radius * 2, radius * 2);
         if (region == IntPtr.Zero) return false;
         if (SetWindowRgn(windowHandle, region, true) != 0) return true;
         _ = DeleteObject(region);
@@ -348,6 +415,50 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(IntPtr windowHandle);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ShowWindow(IntPtr windowHandle, ShowWindowCommand command);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr SetFocus(IntPtr windowHandle);
+
+    internal static bool BringToForeground(IntPtr windowHandle)
+    {
+        var foreground = GetForegroundWindow();
+        var foregroundThread = GetWindowThreadProcessId(foreground, IntPtr.Zero);
+        var currentThread = GetCurrentThreadId();
+        var attached = foregroundThread != 0 && foregroundThread != currentThread &&
+            AttachThreadInput(currentThread, foregroundThread, true);
+        try
+        {
+            _ = BringWindowToTop(windowHandle);
+            var activated = SetForegroundWindow(windowHandle);
+            _ = SetFocus(windowHandle);
+            return activated;
+        }
+        finally
+        {
+            if (attached) _ = AttachThreadInput(currentThread, foregroundThread, false);
+        }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr windowHandle, IntPtr processId);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(uint attach, uint attachTo, bool value);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool BringWindowToTop(IntPtr windowHandle);
+
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern uint TrackPopupMenuEx(
         IntPtr menu,
@@ -359,4 +470,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern int MessageBoxW(IntPtr windowHandle, string text, string caption, uint type);
+
+    [DllImport("user32.dll")]
+    private static extern short GetKeyState(int virtualKey);
+
+    internal static bool ControlPressed() => GetKeyState(0x11) < 0;
 }

@@ -1,4 +1,5 @@
 using Beacon.Core;
+using System.Diagnostics;
 using System.Text;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -7,6 +8,7 @@ namespace Beacon.WinUI;
 
 internal static class Program
 {
+    public static readonly long StartedTimestamp = Stopwatch.GetTimestamp();
     public static SingleInstanceCoordinator? Instance { get; private set; }
 
     [STAThread]

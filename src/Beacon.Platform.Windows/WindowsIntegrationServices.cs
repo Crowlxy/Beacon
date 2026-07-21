@@ -29,6 +29,19 @@ public static class ActiveWindowService
         _ = PInvoke.GetWindowThreadProcessId(PInvoke.GetForegroundWindow(), out var processId);
         return processId;
     }
+
+    public static string? GetProcessName()
+    {
+        try
+        {
+            var processId = GetProcessId();
+            return processId == 0 ? null : Process.GetProcessById((int)processId).ProcessName;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
 }
 
 public static class ExplorerPathService

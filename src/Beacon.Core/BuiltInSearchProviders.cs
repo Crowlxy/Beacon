@@ -59,19 +59,32 @@ public sealed class CalculatorSearchProvider : ISearchProvider
 
         private double Term()
         {
-            var value = Factor();
+            var value = Power();
             while (true)
             {
                 Space();
-                if (Take('*')) value *= Factor();
+                if (Take('*')) value *= Power();
                 else if (Take('/'))
                 {
-                    var divisor = Factor();
+                    var divisor = Power();
                     if (divisor == 0) throw new DivideByZeroException();
                     value /= divisor;
                 }
+                else if (Take('%'))
+                {
+                    var divisor = Power();
+                    if (divisor == 0) throw new DivideByZeroException();
+                    value %= divisor;
+                }
                 else return value;
             }
+        }
+
+        private double Power()
+        {
+            var value = Factor();
+            Space();
+            return Take('^') ? Math.Pow(value, Power()) : value;
         }
 
         private double Factor()
@@ -84,13 +97,24 @@ public sealed class CalculatorSearchProvider : ISearchProvider
                 var value = Expression();
                 Space();
                 if (!Take(')')) throw new FormatException();
-                return value;
+                return Percentage(value);
             }
             var start = _position;
             while (_position < text.Length && (char.IsDigit(text[_position]) || text[_position] == '.')) _position++;
             if (!double.TryParse(text[start.._position], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number))
                 throw new FormatException();
-            return number;
+            return Percentage(number);
+        }
+
+        private double Percentage(double value)
+        {
+            var position = _position;
+            Space();
+            if (!Take('%')) return value;
+            Space();
+            if (_position == text.Length || ")+-*/^".Contains(text[_position])) return value / 100;
+            _position = position;
+            return value;
         }
 
         private bool Take(char value)

@@ -6,9 +6,14 @@ namespace Beacon.Core;
 
 public sealed record QuerySession(string SessionId, CancellationToken CancellationToken);
 
-public sealed class QueryOrchestrator(IEnumerable<ISearchProvider> providers) : IDisposable
+public sealed class QueryOrchestrator(
+    IEnumerable<ISearchProvider> providers,
+    UsageHistoryStore? history = null,
+    TimeSpan? providerTimeout = null,
+    Action<string>? log = null) : IDisposable
 {
     private readonly ISearchProvider[] _providers = providers.ToArray();
+    private readonly TimeSpan _providerTimeout = providerTimeout ?? TimeSpan.FromSeconds(2);
     private readonly object _gate = new();
     private CancellationTokenSource? _sessionCancellation;
     private QuerySession? _currentSession;
@@ -23,6 +28,7 @@ public sealed class QueryOrchestrator(IEnumerable<ISearchProvider> providers) : 
         string rawQuery,
         QueryScope scope = QueryScope.All,
         int contractVersion = ContractVersion.Current,
+        RankingContext? rankingContext = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (!ContractVersion.TryValidate(contractVersion, out _))
@@ -42,13 +48,14 @@ public sealed class QueryOrchestrator(IEnumerable<ISearchProvider> providers) : 
         }
 
         var request = new SearchRequest(session.SessionId, rawQuery, scope, contractVersion);
+        var context = rankingContext ?? new RankingContext(DateTimeOffset.Now);
         var channel = Channel.CreateUnbounded<SearchResultDto>(new UnboundedChannelOptions
         {
             SingleReader = true,
             SingleWriter = false,
         });
         var producers = _providers
-            .Select(provider => ProduceAsync(provider, request, channel.Writer, cancellation.Token))
+            .Select(provider => ProduceWithinDeadlineAsync(provider, request, channel.Writer, cancellation.Token))
             .ToArray();
         _ = CompleteAsync(producers, channel.Writer);
 
@@ -56,6 +63,10 @@ public sealed class QueryOrchestrator(IEnumerable<ISearchProvider> providers) : 
         {
             while (channel.Reader.TryRead(out var result))
             {
+                result = result with
+                {
+                    Score = RankingEngine.Score(result, rawQuery, history?.Get(result.Id), history?.MaximumSelectionCount ?? 0, context),
+                };
                 lock (_gate)
                 {
                     if (_currentSession != session)
@@ -123,6 +134,7 @@ public sealed class QueryOrchestrator(IEnumerable<ISearchProvider> providers) : 
         ISearchProvider provider,
         SearchRequest request,
         ChannelWriter<SearchResultDto> writer,
+        Action<string>? log,
         CancellationToken cancellationToken)
     {
         try
@@ -140,6 +152,30 @@ public sealed class QueryOrchestrator(IEnumerable<ISearchProvider> providers) : 
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+        catch (Exception exception)
+        {
+            log?.Invoke($"WARN Provider {provider.ProviderId} failed: {exception.Message}");
+        }
+    }
+
+    private async Task ProduceWithinDeadlineAsync(
+        ISearchProvider provider,
+        SearchRequest request,
+        ChannelWriter<SearchResultDto> writer,
+        CancellationToken sessionCancellation)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(sessionCancellation);
+        var producer = ProduceAsync(provider, request, writer, log, deadline.Token);
+        var completed = await Task.WhenAny(producer, Task.Delay(_providerTimeout, sessionCancellation));
+        if (completed == producer)
+        {
+            await producer;
+            return;
+        }
+
+        deadline.Cancel();
+        log?.Invoke($"WARN Provider {provider.ProviderId} exceeded {_providerTimeout.TotalMilliseconds:F0}ms deadline");
+        _ = producer.ContinueWith(static task => _ = task.Exception, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     private static async Task CompleteAsync(Task[] producers, ChannelWriter<SearchResultDto> writer)

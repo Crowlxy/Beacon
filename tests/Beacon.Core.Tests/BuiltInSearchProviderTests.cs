@@ -9,6 +9,9 @@ public sealed class BuiltInSearchProviderTests
     [TestCase("1+2*3", "7")]
     [TestCase("(1.5 + 2.5) / 2", "2")]
     [TestCase("-3 + 5", "2")]
+    [TestCase("2^3^2", "512")]
+    [TestCase("10%3", "1")]
+    [TestCase("50%", "0.5")]
     public async Task CalculatorEvaluatesRepresentativeExpressions(string query, string expected) =>
         Assert.That((await Results(new CalculatorSearchProvider(), query)).Single().Title, Is.EqualTo(expected));
 

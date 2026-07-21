@@ -44,6 +44,17 @@ System.Data.OleDb 9.0.15 is distributed under the .NET runtime MIT License, copy
 
 Flow Launcher and Wox contributors retain their original copyrights. The MIT License text above applies to their migrated portions and Microsoft.Windows.CsWin32.
 
+## R5 standard providers
+
+Beacon includes the following selectively migrated Flow Launcher/Wox MIT-licensed data and parsing logic:
+
+- `src/Beacon.Platform.Windows/Data/WindowsSettings.json` from `Beacon-old/Plugins/Flow.Launcher.Plugin.WindowsSettings/WindowsSettings.json`.
+- `src/Beacon.Platform.Windows/Data/WindowsSettings.ja-JP.xml` from `Beacon-old/Plugins/Flow.Launcher.Plugin.WindowsSettings/Properties/Resources.ja-JP.resx` (extension-only rename for raw resource loading).
+- Chromium bookmark JSON traversal adapted from `Beacon-old/Plugins/Flow.Launcher.Plugin.BrowserBookmark/ChromiumBookmarkLoader.cs`.
+- Firefox bookmark discovery and query adapted from `Beacon-old/Plugins/Flow.Launcher.Plugin.BrowserBookmark/FirefoxBookmarkLoader.cs`; the new implementation uses the Windows inbox `winsqlite3.dll` and adds no package.
+
+Flow Launcher and Wox contributors retain their original copyrights. The MIT License text above applies to these migrated portions.
+
 When code is migrated from the legacy implementation, retain all applicable copyright and license notices. At minimum, review:
 
 - Flow Launcher — MIT License

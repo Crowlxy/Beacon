@@ -95,6 +95,29 @@ public sealed class QueryOrchestratorTests
         Assert.That(await CollectAsync(orchestrator.SearchAsync("query", contractVersion: 1)), Is.Empty);
     }
 
+    [Test]
+    public async Task SlowProviderDoesNotDelayOrLeakLateResults()
+    {
+        using var orchestrator = new QueryOrchestrator([
+            new DummyProvider("fast", 0),
+            new StubbornProvider(),
+        ], providerTimeout: TimeSpan.FromMilliseconds(25));
+
+        var results = await CollectAsync(orchestrator.SearchAsync("query"));
+
+        Assert.That(results.Single().ProviderId, Is.EqualTo("fast"));
+    }
+
+    private sealed class StubbornProvider : ISearchProvider
+    {
+        public string ProviderId => "slow";
+        public async IAsyncEnumerable<SearchResultDto> SearchAsync(SearchRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.Delay(200, CancellationToken.None);
+            yield return Result(ProviderId, request.RawQuery);
+        }
+    }
+
     private static async Task<List<SearchResultDto>> CollectAsync(IAsyncEnumerable<SearchResultDto> source)
     {
         var results = new List<SearchResultDto>();

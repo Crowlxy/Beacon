@@ -23,6 +23,8 @@
     <ProjectReference Include="..\Beacon.PluginHost\Beacon.PluginHost.csproj" ReferenceOutputAssembly="false" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
     <PackageReference Include="StreamJsonRpc" Version="2.25.29" />
+    <Content Include="..\..\fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\fonts\OFL-1.1.txt" Link="Assets\Fonts\OFL-1.1.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CopyXamlBinaryFiles" AfterTargets="Build;Publish">
     <ItemGroup>
