@@ -27,6 +27,7 @@ public sealed class UsageHistoryStore
     public bool Enabled { get; set; } = true;
     public int MaximumSelectionCount { get { lock (_gate) return _entries.Count == 0 ? 0 : _entries.Values.Max(x => x.SelectionCount); } }
     public UsageHistoryEntry? Get(string resultId) { lock (_gate) return _entries.GetValueOrDefault(resultId); }
+    public IReadOnlyList<UsageHistoryEntry> Snapshot() { lock (_gate) return _entries.Values.ToArray(); }
 
     public void Record(string resultId, string? activeProcessName, string mode, DateTimeOffset? now = null)
     {

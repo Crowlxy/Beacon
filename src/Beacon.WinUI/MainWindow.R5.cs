@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
+using IconSource = Beacon.Contracts.IconSource;
 
 namespace Beacon.WinUI;
 
@@ -16,9 +17,12 @@ public sealed partial class MainWindow
     private QueryScopeSelection? _queryScope;
     private SearchResultDto? _actionTarget;
     private ActionDescriptor? _selectedAction;
+    private ActionInputFlow? _actionInputFlow;
     private string? _actionArgument;
     private SearchResultDto? _pendingSystemResult;
     private bool _systemActionConfirmed;
+    private bool _clearClipboardPending;
+    private CancellationTokenSource? _runningCancellation;
 
     private bool HandleUxKey(KeyRoutedEventArgs args)
     {
@@ -39,6 +43,13 @@ public sealed partial class MainWindow
         }
         if (args.Key == VirtualKey.Escape)
         {
+            var leaving = _viewState.State;
+            if (leaving == LauncherViewState.Running) _runningCancellation?.Cancel();
+            if (leaving == LauncherViewState.Confirmation)
+            {
+                _clearClipboardPending = false;
+                _pendingSystemResult = null;
+            }
             switch (_viewState.Back(QueryBox.Text.Length > 0))
             {
                 case BackOutcome.Close: _appWindow.Hide(); break;
@@ -47,9 +58,24 @@ public sealed partial class MainWindow
             }
             return true;
         }
-        if (args.Key == VirtualKey.Right && ResultsList.SelectedItem is ResultRow contextRow)
+        if ((args.Key == VirtualKey.Right || (args.Key == VirtualKey.Enter && NativeMethods.ShiftPressed())) && ResultsList.SelectedItem is ResultRow contextRow)
         {
             OpenActions(contextRow.Result);
+            return true;
+        }
+        if (args.Key == VirtualKey.Delete && _viewState.BrowseCategory == BrowseCategory.Clipboard)
+        {
+            if (NativeMethods.ShiftPressed())
+            {
+                _clearClipboardPending = true;
+                _viewState.RequestConfirmation();
+                ShowStatus("クリップボード履歴をすべて削除しますか？", "復元できません。Enterで削除 / Escで戻る");
+            }
+            else if (ResultsList.SelectedItem is ResultRow clipboardRow && clipboardRow.Result.Id.StartsWith("clipboard:", StringComparison.Ordinal))
+            {
+                _clipboardHistory.Delete(clipboardRow.Result.Id[10..]);
+                ApplyClipboardResults(QueryBox.Text);
+            }
             return true;
         }
         return false;
@@ -60,14 +86,29 @@ public sealed partial class MainWindow
         if (_viewState.State == LauncherViewState.Running) return;
         if (_viewState.State == LauncherViewState.ActionInput)
         {
-            if (_selectedAction?.Parameters.Any(x => x.Required) == true && string.IsNullOrWhiteSpace(QueryBox.Text)) return;
-            _actionArgument = QueryBox.Text;
+            if (_actionInputFlow is null || !_actionInputFlow.Submit(QueryBox.Text)) return;
+            if (!_actionInputFlow.Complete)
+            {
+                QueryBox.Text = string.Empty;
+                QueryPlaceholder.Text = _actionInputFlow.Current!.Title;
+                ShowStatus(_selectedAction!.Title, $"{_actionInputFlow.ParameterIndex + 1}/{_selectedAction.Parameters.Length} を入力");
+                return;
+            }
+            _actionArgument = _selectedAction!.Parameters.Length == 0 ? null : _actionInputFlow.Values[_selectedAction.Parameters[0].Id];
             if (_selectedAction?.RequiresConfirmation == true) ShowActionConfirmation(); else RunSelectedAction();
             return;
         }
         if (_viewState.State == LauncherViewState.Confirmation)
         {
-            if (_pendingSystemResult is not null)
+            if (_clearClipboardPending)
+            {
+                _clearClipboardPending = false;
+                _clipboardHistory.Clear();
+                _viewState.Reset();
+                _viewState.EnterBrowse(BrowseCategory.Clipboard);
+                ApplyClipboardResults();
+            }
+            else if (_pendingSystemResult is not null)
             {
                 _systemActionConfirmed = true;
                 var pending = _pendingSystemResult;
@@ -75,6 +116,12 @@ public sealed partial class MainWindow
                 if (_viewState.TryBeginRunning()) Execute(pending);
             }
             else RunSelectedAction();
+            return;
+        }
+        if (row.Result.ProviderId == "windows.clipboard")
+        {
+            ClipboardTextService.Set(row.Result.CopyText ?? row.Result.ExecutionToken ?? string.Empty);
+            _appWindow.Hide();
             return;
         }
         if (row.Result.ProviderId == ActionProviderId)
@@ -115,9 +162,10 @@ public sealed partial class MainWindow
         if (_selectedAction is null || _actionTarget is null) return;
         if (_selectedAction.Parameters.Length > 0)
         {
+            _actionInputFlow = new ActionInputFlow(_selectedAction);
             _viewState.BeginActionInput();
             QueryBox.Text = string.Empty;
-            QueryPlaceholder.Text = _selectedAction.Parameters[0].Title;
+            QueryPlaceholder.Text = _actionInputFlow.Current!.Title;
             ShowStatus(_selectedAction.Title, "入力後にEnter");
         }
         else if (_selectedAction.RequiresConfirmation) ShowActionConfirmation();
@@ -133,8 +181,22 @@ public sealed partial class MainWindow
     private async void RunSelectedAction()
     {
         if (_selectedAction is null || _actionTarget?.FilePath is null || !_viewState.TryBeginRunning()) return;
+        _runningCancellation?.Dispose();
+        _runningCancellation = new CancellationTokenSource();
+        var cancellationToken = _runningCancellation.Token;
         ShowStatus(_selectedAction.Title, "実行中…");
-        var result = await Task.Run(() => BuiltInActionService.Execute(_selectedAction.Id, _actionTarget.FilePath, _actionArgument));
+        ActionExecutionResult result;
+        try
+        {
+            result = await Task.Run(() =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return BuiltInActionService.Execute(_selectedAction.Id, _actionTarget.FilePath, _actionArgument, cancellationToken);
+            }, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) { return; }
+        if (cancellationToken.IsCancellationRequested) return;
+        if (result.Success) _usageHistory.Record($"action:{_selectedAction.Id}", _activeProcessName, "Action");
         ShowStatus(_selectedAction.Title, result.Success ? "完了" : result.FailureReason ?? "失敗");
     }
 
@@ -142,6 +204,11 @@ public sealed partial class MainWindow
     {
         _viewState.Reset();
         _viewState.EnterBrowse(category);
+        DisplayBrowse(category);
+    }
+
+    private void DisplayBrowse(BrowseCategory category)
+    {
         QueryBox.Text = string.Empty;
         QueryPlaceholder.Text = category switch
         {
@@ -151,21 +218,44 @@ public sealed partial class MainWindow
             _ => "クリップボード",
         };
         if (category == BrowseCategory.Actions)
-            ApplyResults(BuiltInActions.All.Select(ActionResult).ToArray());
+            ApplyActionResults();
         else if (category == BrowseCategory.Clipboard)
             ApplyClipboardResults();
+        else if (category == BrowseCategory.Files)
+            ApplyResults(WindowsRecentFiles.Get().ToArray());
         else
-            ShowStatus(QueryPlaceholder.Text, "入力して絞り込み");
+            _ = ApplyApplicationBrowseAsync();
         ResizeForResults(_results.Count);
     }
 
-    private void ApplyClipboardResults()
+    private async Task ApplyApplicationBrowseAsync()
+    {
+        var applications = await _appSearchProvider.BrowseAsync();
+        if (_viewState.BrowseCategory != BrowseCategory.Applications || QueryBox.Text.Length != 0) return;
+        var rows = applications
+            .OrderByDescending(x => _usageHistory.Get(x.Id)?.SelectionCount ?? 0)
+            .ThenBy(x => x.Title, StringComparer.CurrentCultureIgnoreCase)
+            .Take(8).ToArray();
+        ApplyResults(rows);
+        ResizeForResults(rows.Length);
+    }
+
+    private void ApplyActionResults(string query = "")
+    {
+        var rows = SystemActionSearchProvider.Browse(query)
+            .OrderByDescending(x => _usageHistory.Get(x.Id)?.SelectionCount ?? 0)
+            .ToArray();
+        ApplyResults(rows);
+        ResizeForResults(rows.Length);
+    }
+
+    private void ApplyClipboardResults(string query = "")
     {
         var rows = _clipboardHistory.Enabled
-            ? _clipboardHistory.Items.Take(8).Select(x => new SearchResultDto
+            ? _clipboardHistory.Items.Where(x => x.Content.Contains(query, StringComparison.CurrentCultureIgnoreCase)).Take(8).Select(x => new SearchResultDto
             {
                 Id = $"clipboard:{x.Id}", ProviderId = "windows.clipboard", Title = x.Content.Split('\n')[0],
-                Subtitle = x.CreatedAt.LocalDateTime.ToString("g"), Kind = ResultKind.Action,
+                Subtitle = x.CreatedAt.LocalDateTime.ToString("g", System.Globalization.CultureInfo.CurrentCulture), Kind = ResultKind.Action,
                 Icon = new(IconSource.FluentGlyph, "\uE8C8"), ExecutionToken = x.Content, CopyText = x.Content,
             }).ToArray()
             : [StatusResult("クリップボード履歴は無効です", "トレイメニューから有効化できます")];
@@ -196,8 +286,16 @@ public sealed partial class MainWindow
             QueryPlaceholder.Text = "Anything...";
             StartSearch(QueryBox.Text);
         }
-        else if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory is { } category) EnterBrowse(category);
+        else if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory is { } category) DisplayBrowse(category);
         else if (_viewState.State == LauncherViewState.ContextActions && _actionTarget is not null) OpenActions(_actionTarget);
+        else if (_viewState.State == LauncherViewState.ActionInput && _selectedAction is not null && _actionInputFlow is not null)
+        {
+            QueryBox.Text = _actionInputFlow.Rewind();
+            QueryPlaceholder.Text = _actionInputFlow.Current?.Title ?? "引数";
+            ShowStatus(_selectedAction.Title, "入力後にEnter");
+        }
+        else if (_viewState.State == LauncherViewState.Confirmation && _selectedAction is not null)
+            ShowStatus($"{_selectedAction.Title}を実行しますか？", "Enterで実行 / Escで戻る");
     }
 
     private void ShowStatus(string title, string subtitle)
@@ -230,6 +328,6 @@ public sealed partial class MainWindow
     private void UpdateGhostCompletion(string query)
     {
         var last = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
-        GhostCompletion.Text = BuiltInActions.All.Select(x => x.QuickKey).FirstOrDefault(x => x is not null && x.StartsWith(last, StringComparison.OrdinalIgnoreCase) && x.Length > last.Length) ?? string.Empty;
+        GhostCompletion.Text = last.Length == 0 ? string.Empty : BuiltInActions.All.Select(x => x.QuickKey).FirstOrDefault(x => x is not null && x.StartsWith(last, StringComparison.OrdinalIgnoreCase) && x.Length > last.Length) ?? string.Empty;
     }
 }

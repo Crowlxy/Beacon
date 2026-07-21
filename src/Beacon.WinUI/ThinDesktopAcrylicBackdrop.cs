@@ -8,6 +8,12 @@ namespace Beacon.WinUI;
 internal sealed class ThinDesktopAcrylicBackdrop : SystemBackdrop, IDisposable
 {
     private DesktopAcrylicController? _controller;
+    private SystemBackdropConfiguration? _configuration;
+
+    internal void SetInputActive(bool active)
+    {
+        if (_configuration is not null) _configuration.IsInputActive = active;
+    }
 
     protected override void OnTargetConnected(
         ICompositionSupportsSystemBackdrop connectedTarget,
@@ -27,8 +33,8 @@ internal sealed class ThinDesktopAcrylicBackdrop : SystemBackdrop, IDisposable
         };
         try
         {
-            controller.SetSystemBackdropConfiguration(
-                GetDefaultSystemBackdropConfiguration(connectedTarget, xamlRoot));
+            _configuration = GetDefaultSystemBackdropConfiguration(connectedTarget, xamlRoot);
+            controller.SetSystemBackdropConfiguration(_configuration);
             controller.AddSystemBackdropTarget(connectedTarget);
             _controller = controller;
         }
@@ -43,6 +49,7 @@ internal sealed class ThinDesktopAcrylicBackdrop : SystemBackdrop, IDisposable
     {
         base.OnTargetDisconnected(disconnectedTarget);
         _controller?.RemoveSystemBackdropTarget(disconnectedTarget);
+        _configuration = null;
         Dispose();
     }
 

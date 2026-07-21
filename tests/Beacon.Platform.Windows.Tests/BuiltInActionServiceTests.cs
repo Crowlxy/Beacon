@@ -33,4 +33,18 @@ public sealed class BuiltInActionServiceTests
         try { Assert.That(BuiltInActionService.Execute("unknown", path).Success, Is.False); }
         finally { File.Delete(path); }
     }
+
+    [Test]
+    public void CancellationIsObservedBeforeFileMutation()
+    {
+        var path = Path.GetTempFileName();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        try
+        {
+            Assert.Throws<OperationCanceledException>(() => BuiltInActionService.Execute("zip", path, cancellationToken: cancellation.Token));
+            Assert.That(File.Exists(path + ".zip"), Is.False);
+        }
+        finally { File.Delete(path); }
+    }
 }

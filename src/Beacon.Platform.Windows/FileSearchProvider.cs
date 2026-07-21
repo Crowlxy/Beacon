@@ -30,3 +30,36 @@ public sealed class FileSearchProvider(Action<string>? log = null) : ISearchProv
         }
     }
 }
+
+public static class WindowsRecentFiles
+{
+    public static IReadOnlyList<SearchResultDto> Get(int maximumCount = 8)
+    {
+        var recent = Environment.GetFolderPath(Environment.SpecialFolder.Recent);
+        if (!Directory.Exists(recent)) return [];
+        var results = new List<SearchResultDto>();
+        foreach (var shortcut in Directory.EnumerateFiles(recent, "*.lnk").OrderByDescending(File.GetLastWriteTimeUtc))
+        {
+            try
+            {
+                var target = Programs.ShellLinkReader.Read(shortcut).TargetPath;
+                if (string.IsNullOrWhiteSpace(target) || !File.Exists(target)) continue;
+                results.Add(new SearchResultDto
+                {
+                    Id = target,
+                    ProviderId = FileSearchProvider.Id,
+                    Title = Path.GetFileName(target),
+                    Subtitle = target,
+                    Kind = ResultKind.File,
+                    Icon = new(IconSource.FileShellIcon, target),
+                    FilePath = target,
+                    ExecutionToken = target,
+                    AutoCompleteText = Path.GetFileName(target),
+                });
+                if (results.Count == maximumCount) break;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+        }
+        return results;
+    }
+}

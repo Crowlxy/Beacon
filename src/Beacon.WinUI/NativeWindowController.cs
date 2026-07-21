@@ -475,4 +475,5 @@ internal static class NativeMethods
     private static extern short GetKeyState(int virtualKey);
 
     internal static bool ControlPressed() => GetKeyState(0x11) < 0;
+    internal static bool ShiftPressed() => GetKeyState(0x10) < 0;
 }

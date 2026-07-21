@@ -25,6 +25,7 @@ internal static class R1Storage
                     ContractVersion = Contracts.ContractVersion.Current,
                     LogRetentionCount = DefaultLogRetentionCount,
                     ClipboardEnabled = false,
+                    ClipboardExcludedApplications = Array.Empty<string>(),
                     PersonalizationEnabled = true,
                     QuickKeys = new { rf = "reveal", cp = "copy-path", rn = "rename", term = "terminal" },
                 }),

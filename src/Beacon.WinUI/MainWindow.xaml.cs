@@ -214,6 +214,8 @@ public sealed partial class MainWindow : Window, IDisposable
 
     public void Dispose()
     {
+        _runningCancellation?.Cancel();
+        _runningCancellation?.Dispose();
         _orchestrator.Dispose();
         _clipboardHistory.Dispose();
         _appSearchProvider.Dispose();

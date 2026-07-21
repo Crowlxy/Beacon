@@ -7,7 +7,12 @@
             <SolidColorBrush x:Key="LauncherTintBrush" Color="#40FFFFFF" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#1A000000" />
             <SolidColorBrush x:Key="LauncherTextBrush" Color="#1D1D1F" />
-            <SolidColorBrush x:Key="LauncherPlaceholderBrush" Color="#7A000000" />
+            <SolidColorBrush x:Key="LauncherInputTextBrush" Color="#E6000000" />
+            <SolidColorBrush x:Key="LauncherResultTitleBrush" Color="#D9000000" />
+            <SolidColorBrush x:Key="LauncherSecondaryTextBrush" Color="#8F000000" />
+            <SolidColorBrush x:Key="LauncherPlaceholderBrush" Color="#73000000" />
+            <SolidColorBrush x:Key="LauncherWeakTextBrush" Color="#59000000" />
+            <SolidColorBrush x:Key="LauncherDisabledTextBrush" Color="#3D000000" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#16000000" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#1C000000" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#22000000" />
@@ -17,7 +22,12 @@
             <SolidColorBrush x:Key="LauncherTintBrush" Color="#33000000" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#2AFFFFFF" />
             <SolidColorBrush x:Key="LauncherTextBrush" Color="#F2FFFFFF" />
-            <SolidColorBrush x:Key="LauncherPlaceholderBrush" Color="#8FFFFFFF" />
+            <SolidColorBrush x:Key="LauncherInputTextBrush" Color="#F2FFFFFF" />
+            <SolidColorBrush x:Key="LauncherResultTitleBrush" Color="#E8FFFFFF" />
+            <SolidColorBrush x:Key="LauncherSecondaryTextBrush" Color="#A3FFFFFF" />
+            <SolidColorBrush x:Key="LauncherPlaceholderBrush" Color="#8AFFFFFF" />
+            <SolidColorBrush x:Key="LauncherWeakTextBrush" Color="#70FFFFFF" />
+            <SolidColorBrush x:Key="LauncherDisabledTextBrush" Color="#4DFFFFFF" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#20FFFFFF" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#28FFFFFF" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#30FFFFFF" />
@@ -27,7 +37,12 @@
             <SolidColorBrush x:Key="LauncherTintBrush" Color="#33000000" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#2AFFFFFF" />
             <SolidColorBrush x:Key="LauncherTextBrush" Color="#F2FFFFFF" />
-            <SolidColorBrush x:Key="LauncherPlaceholderBrush" Color="#8FFFFFFF" />
+            <SolidColorBrush x:Key="LauncherInputTextBrush" Color="#F2FFFFFF" />
+            <SolidColorBrush x:Key="LauncherResultTitleBrush" Color="#E8FFFFFF" />
+            <SolidColorBrush x:Key="LauncherSecondaryTextBrush" Color="#A3FFFFFF" />
+            <SolidColorBrush x:Key="LauncherPlaceholderBrush" Color="#8AFFFFFF" />
+            <SolidColorBrush x:Key="LauncherWeakTextBrush" Color="#70FFFFFF" />
+            <SolidColorBrush x:Key="LauncherDisabledTextBrush" Color="#4DFFFFFF" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#20FFFFFF" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#28FFFFFF" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#30FFFFFF" />
@@ -42,12 +57,13 @@
     <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
     <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent" />
     <FontFamily x:Key="LauncherFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Regular.ttf#Zen Kaku Gothic New</FontFamily>
+    <FontFamily x:Key="LauncherMediumFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Medium.ttf#Zen Kaku Gothic New</FontFamily>
     <FontFamily x:Key="LauncherBoldFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Bold.ttf#Zen Kaku Gothic New</FontFamily>
     <FontFamily x:Key="QuickKeyFontFamily">ms-appx:///Assets/Fonts/InterVariable.ttf#Inter Variable</FontFamily>
     <x:Double x:Key="LauncherWidth">560</x:Double>
     <x:Double x:Key="SearchBarHeight">56</x:Double>
     <GridLength x:Key="SearchBarGridHeight">56</GridLength>
-    <x:Double x:Key="SearchFontSize">16</x:Double>
+    <x:Double x:Key="SearchFontSize">18</x:Double>
     <x:Double x:Key="SearchIconSize">22</x:Double>
     <CornerRadius x:Key="SearchBarCornerRadius">32</CornerRadius>
     <CornerRadius x:Key="ExpandedPanelCornerRadius">24</CornerRadius>
@@ -89,5 +105,4 @@
     <SolidColorBrush x:Key="CategoryChipBrush" Color="#18007AFF" />
     <SolidColorBrush x:Key="QuickKeyBrush" Color="#14000000" />
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent" />
-    <x:Double x:Key="ResultSubtitleOpacity">0.72</x:Double>
 </ResourceDictionary>

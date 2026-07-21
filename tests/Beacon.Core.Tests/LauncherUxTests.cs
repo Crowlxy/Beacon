@@ -55,4 +55,24 @@ public sealed class LauncherUxTests
         Assert.That(BuiltInActions.All, Has.Count.EqualTo(10));
         Assert.That(BuiltInActions.FindQuickKey("term")?.Id, Is.EqualTo("terminal"));
     }
+
+    [Test]
+    public void ActionInputFlowAdvancesOneParameterAtATime()
+    {
+        var descriptor = new ActionDescriptor("test", "Test", "", [
+            new("name", "Name", ActionParameterKind.Text, true),
+            new("choice", "Choice", ActionParameterKind.Choice, true, ["A", "B"]),
+        ]);
+        var flow = new ActionInputFlow(descriptor);
+
+        Assert.That(flow.Submit(""), Is.False);
+        Assert.That(flow.Submit("value"), Is.True);
+        Assert.That(flow.Current?.Id, Is.EqualTo("choice"));
+        Assert.That(flow.Submit("C"), Is.False);
+        Assert.That(flow.Submit("B"), Is.True);
+        Assert.That(flow.Complete, Is.True);
+        Assert.That(flow.Values["name"], Is.EqualTo("value"));
+        Assert.That(flow.Rewind(), Is.EqualTo("B"));
+        Assert.That(flow.Current?.Id, Is.EqualTo("choice"));
+    }
 }

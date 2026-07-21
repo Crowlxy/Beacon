@@ -145,21 +145,27 @@ public sealed class SystemActionSearchProvider : ISearchProvider
     ];
     public string ProviderId => Id;
 
+    public static IReadOnlyList<SearchResultDto> Browse(string query = "") => Actions
+        .Where(action => string.IsNullOrWhiteSpace(query) || action.Terms.Any(x => x.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
+        .Select(CreateResult)
+        .ToArray();
+
     public async IAsyncEnumerable<SearchResultDto> SearchAsync(SearchRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (request.Scope is not (QueryScope.All or QueryScope.Actions) || string.IsNullOrWhiteSpace(request.RawQuery)) yield break;
-        foreach (var action in Actions)
+        foreach (var result in Browse(request.RawQuery))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!action.Terms.Any(x => x.Contains(request.RawQuery, StringComparison.CurrentCultureIgnoreCase))) continue;
-            yield return new SearchResultDto
-            {
-                Id = $"system:{action.Token}", ProviderId = Id, Title = action.Title, Subtitle = "システム操作",
-                Kind = ResultKind.Action, Icon = new(IconSource.FluentGlyph, "\uE7E8"), ExecutionToken = action.Token,
-            };
+            yield return result;
         }
         await Task.CompletedTask;
     }
+
+    private static SearchResultDto CreateResult((string Token, string Title, string[] Terms) action) => new()
+    {
+        Id = $"system:{action.Token}", ProviderId = Id, Title = action.Title, Subtitle = "システム操作",
+        Kind = ResultKind.Action, Icon = new(IconSource.FluentGlyph, "\uE7E8"), ExecutionToken = action.Token,
+    };
 }
 
 internal sealed record Bookmark(string Title, string Url, string Source);

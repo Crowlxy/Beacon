@@ -25,6 +25,8 @@ public sealed class StandardProviderTests
     public async Task SystemActionsMatchJapaneseAndRespectCancellation()
     {
         Assert.That((await Results(new SystemActionSearchProvider(), "再起動")).Single().ExecutionToken, Is.EqualTo("restart"));
+        Assert.That(SystemActionSearchProvider.Browse(), Has.Count.EqualTo(5));
+        Assert.That(SystemActionSearchProvider.Browse("ロック").Single().ExecutionToken, Is.EqualTo("lock"));
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         Assert.ThrowsAsync<OperationCanceledException>(async () =>

@@ -28,8 +28,8 @@
                     BorderThickness="{StaticResource QueryBoxBorderThickness}"
                     Padding="{StaticResource SearchTextPadding}"
                     FontSize="{StaticResource SearchFontSize}"
-                    FontFamily="{StaticResource LauncherFontFamily}"
-                    Foreground="{ThemeResource LauncherTextBrush}"
+                    FontFamily="{StaticResource LauncherMediumFontFamily}"
+                    Foreground="{ThemeResource LauncherInputTextBrush}"
                     VerticalAlignment="Center"
                     TextChanged="OnQueryTextChanged"
                     TextCompositionStarted="OnCompositionStarted"
@@ -39,7 +39,7 @@
                     x:Name="QueryPlaceholder"
                     Grid.Column="1"
                     FontSize="{StaticResource SearchFontSize}"
-                    FontFamily="{StaticResource LauncherFontFamily}"
+                    FontFamily="{StaticResource LauncherMediumFontFamily}"
                     Foreground="{ThemeResource LauncherPlaceholderBrush}"
                     Text="Anything..."
                     Margin="{StaticResource SearchPlaceholderPadding}"
@@ -51,7 +51,7 @@
                     HorizontalAlignment="Right"
                     FontFamily="{StaticResource QuickKeyFontFamily}"
                     FontSize="{StaticResource CategoryChipFontSize}"
-                    Foreground="{ThemeResource LauncherPlaceholderBrush}"
+                    Foreground="{ThemeResource LauncherWeakTextBrush}"
                     VerticalAlignment="Center"
                     IsHitTestVisible="False" />
             </Grid>
@@ -101,11 +101,11 @@
                                 </Grid>
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock FontFamily="{StaticResource LauncherBoldFontFamily}" FontSize="{StaticResource ResultTitleSize}" Text="{Binding Result.Title}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultSubtitleSize}" Margin="{StaticResource ResultSubtitleMargin}" Opacity="{StaticResource ResultSubtitleOpacity}" Text="{Binding Result.Subtitle}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultTitleSize}" Foreground="{ThemeResource LauncherResultTitleBrush}" Text="{Binding Result.Title}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultSubtitleSize}" Margin="{StaticResource ResultSubtitleMargin}" Foreground="{ThemeResource LauncherSecondaryTextBrush}" Text="{Binding Result.Subtitle}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <Border Grid.Column="2" Background="{StaticResource QuickKeyBrush}" CornerRadius="{StaticResource CategoryChipCornerRadius}" Padding="{StaticResource QuickKeyPadding}" Margin="{StaticResource QuickKeyMargin}" VerticalAlignment="Center" Visibility="{Binding QuickKeyVisibility}">
-                                <TextBlock FontFamily="{StaticResource QuickKeyFontFamily}" FontSize="{StaticResource CategoryChipFontSize}" Text="{Binding QuickKey}" />
+                                <TextBlock FontFamily="{StaticResource QuickKeyFontFamily}" FontSize="{StaticResource CategoryChipFontSize}" Foreground="{ThemeResource LauncherWeakTextBrush}" Text="{Binding QuickKey}" />
                             </Border>
                         </Grid>
                     </DataTemplate>

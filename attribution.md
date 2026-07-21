@@ -55,6 +55,13 @@ Beacon includes the following selectively migrated Flow Launcher/Wox MIT-license
 
 Flow Launcher and Wox contributors retain their original copyrights. The MIT License text above applies to these migrated portions.
 
+## Bundled fonts
+
+Beacon bundles `ZenKakuGothicNew-Regular.ttf`, `ZenKakuGothicNew-Medium.ttf`, and `ZenKakuGothicNew-Bold.ttf` from the Zen Kaku Gothic New project, copyright 2022 The Zen Project Authors. Beacon also bundles `InterVariable.ttf` from the Inter project, copyright 2016 The Inter Project Authors. Both font families are distributed under the SIL Open Font License 1.1; the complete license and copyright notices are included at `fonts/OFL-1.1.txt` and in the Portable output under `Assets/Fonts/OFL-1.1.txt`.
+
+- Zen Kaku Gothic New source: https://github.com/googlefonts/zen-kakugothic
+- Inter source: https://github.com/rsms/inter
+
 When code is migrated from the legacy implementation, retain all applicable copyright and license notices. At minimum, review:
 
 - Flow Launcher — MIT License

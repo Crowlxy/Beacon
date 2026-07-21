@@ -83,6 +83,36 @@ public sealed record ActionDescriptor(
     bool RequiresConfirmation = false,
     string? QuickKey = null);
 
+public sealed class ActionInputFlow(ActionDescriptor descriptor)
+{
+    private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
+    public int ParameterIndex { get; private set; }
+    public ActionParameter? Current => ParameterIndex < descriptor.Parameters.Length ? descriptor.Parameters[ParameterIndex] : null;
+    public bool Complete => Current is null;
+    public IReadOnlyDictionary<string, string> Values => _values;
+
+    public bool Submit(string value)
+    {
+        var parameter = Current ?? throw new InvalidOperationException("入力は完了しています。");
+        if (parameter.Required && string.IsNullOrWhiteSpace(value)) return false;
+        if (parameter.Kind == ActionParameterKind.Choice && parameter.Choices is { Length: > 0 } &&
+            !parameter.Choices.Contains(value, StringComparer.CurrentCultureIgnoreCase)) return false;
+        _values[parameter.Id] = value;
+        ParameterIndex++;
+        return true;
+    }
+
+    public string Rewind()
+    {
+        if (ParameterIndex == 0) return string.Empty;
+        ParameterIndex--;
+        var parameter = descriptor.Parameters[ParameterIndex];
+        var value = _values.GetValueOrDefault(parameter.Id) ?? string.Empty;
+        _values.Remove(parameter.Id);
+        return value;
+    }
+}
+
 public static class BuiltInActions
 {
     public static IReadOnlyList<ActionDescriptor> All { get; } =

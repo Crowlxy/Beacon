@@ -58,6 +58,7 @@ public sealed partial class MainWindow
         ApplyResults([]);
         ResizeForResults(0);
         RepositionLauncher();
+        if (SystemBackdrop is ThinDesktopAcrylicBackdrop acrylic) acrylic.SetInputActive(true);
         NativeMethods.ShowWindow(_windowHandle, NativeMethods.ShowWindowCommand.Show);
         Activate();
         if (!NativeMethods.BringToForeground(_windowHandle))
@@ -90,6 +91,8 @@ public sealed partial class MainWindow
 
     private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
     {
+        if (SystemBackdrop is ThinDesktopAcrylicBackdrop acrylic)
+            acrylic.SetInputActive(args.WindowActivationState != WindowActivationState.Deactivated);
         if (args.WindowActivationState == WindowActivationState.Deactivated) _appWindow.Hide();
         else DispatcherQueue.TryEnqueue(() => QueryBox.Focus(FocusState.Programmatic));
     }
@@ -106,16 +109,32 @@ public sealed partial class MainWindow
 
     private void StartSearch(string query)
     {
+        if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory == BrowseCategory.Actions)
+        {
+            ApplyActionResults(query);
+            return;
+        }
         if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory == BrowseCategory.Clipboard)
         {
-            ApplyClipboardResults();
+            ApplyClipboardResults(query);
             return;
         }
         if (string.IsNullOrWhiteSpace(query))
         {
             _orchestrator.Cancel();
-            ApplyResults([]);
-            ResizeForResults(0);
+            if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory == BrowseCategory.Applications)
+                _ = ApplyApplicationBrowseAsync();
+            else if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory == BrowseCategory.Files)
+            {
+                var recent = WindowsRecentFiles.Get().ToArray();
+                ApplyResults(recent);
+                ResizeForResults(recent.Length);
+            }
+            else
+            {
+                ApplyResults([]);
+                ResizeForResults(0);
+            }
             return;
         }
         ApplyResults([]);
@@ -132,9 +151,15 @@ public sealed partial class MainWindow
         {
             var pending = new List<SearchResultDto>();
             if (_queryScope?.IsClipboard == true) { ApplyClipboardResults(); return; }
+            var scope = _queryScope?.ProviderScope ?? (_viewState.BrowseCategory switch
+            {
+                BrowseCategory.Applications => QueryScope.Applications,
+                BrowseCategory.Files => QueryScope.Files,
+                _ => QueryScope.All,
+            });
             await foreach (var result in _orchestrator.SearchAsync(
                                query,
-                               _queryScope?.ProviderScope ?? QueryScope.All,
+                               scope,
                                rankingContext: new RankingContext(DateTimeOffset.Now, _activeProcessName, _activeFolder, _usageHistory.Enabled)))
             {
                 if (!string.Equals(displayedQuery, QueryBox.Text, StringComparison.Ordinal)) return;

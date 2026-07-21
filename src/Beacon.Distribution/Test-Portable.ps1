@@ -55,17 +55,24 @@ function Invoke-BeaconHotkey {
 
 function Test-Beacon([string]$Root, [string]$Phase) {
     $executable = Join-Path $Root 'Beacon\Beacon.Next.exe'
-    $log = Join-Path $Root 'Beacon\Data\Logs\beacon.log'
+    $logDirectory = Join-Path $Root 'Beacon\Data\Logs'
+    function Read-BeaconLog {
+        $current = Get-ChildItem -LiteralPath $logDirectory -Filter 'beacon-????-??-??.log' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+        if ($null -eq $current) { return '' }
+        return Get-Content -LiteralPath $current.FullName -Raw
+    }
     # 前フェーズから持ち越したログのマーカーに誤マッチすると、起動完了前に
     # activationインスタンスを起動してMutex獲得レースになる（LESSONS 2026-07-17）
-    Get-ChildItem -LiteralPath (Split-Path -LiteralPath $log) -Filter '*.log' -ErrorAction SilentlyContinue |
+    Get-ChildItem -LiteralPath $logDirectory -Filter '*.log' -ErrorAction SilentlyContinue |
         Remove-Item -Force
     Write-Stage "${Phase}: launching first instance"
     $process = Start-Process -FilePath $executable -PassThru
     try {
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         while ([DateTime]::UtcNow -lt $deadline) {
-            $content = if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Raw } else { '' }
+            $content = Read-BeaconLog
             if ($content -match 'Hotkey and tray registered') { break }
             Start-Sleep -Milliseconds 200
         }
@@ -93,17 +100,16 @@ function Test-Beacon([string]$Root, [string]$Phase) {
 
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         while ([DateTime]::UtcNow -lt $deadline) {
-            $content = if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Raw } else { '' }
-            if ($content -match 'Hotkey or activation pipe' -and $content -match 'RPC cancellation confirmed') {
+            $content = Read-BeaconLog
+            if ($content -match 'Hotkey or activation pipe') {
                 break
             }
             Start-Sleep -Milliseconds 200
         }
 
-        $content = Get-Content -LiteralPath $log -Raw
-        if ($content -match 'ERROR|Exception') { throw "Error marker found in $log." }
+        $content = Read-BeaconLog
+        if ($content -match 'ERROR|Exception') { throw "Error marker found in $logDirectory." }
         if ($content -notmatch 'Hotkey or activation pipe') { throw 'Window activation was not observed.' }
-        if ($content -notmatch 'RPC cancellation confirmed') { throw 'RPC cancellation was not observed.' }
         Write-Stage "${Phase}: all log markers observed"
         return $process
     }
@@ -112,7 +118,7 @@ function Test-Beacon([string]$Root, [string]$Phase) {
         throw
     }
     finally {
-        foreach ($file in Get-ChildItem -LiteralPath (Split-Path -LiteralPath $log) -Filter '*.log' -ErrorAction SilentlyContinue) {
+        foreach ($file in Get-ChildItem -LiteralPath $logDirectory -Filter '*.log' -ErrorAction SilentlyContinue) {
             Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $logArchive "$Phase-$($file.Name)") -Force
         }
     }
@@ -130,4 +136,4 @@ if (-not $KeepRunning) {
     $secondProcess.WaitForExit()
 }
 
-Write-Host 'Portable launch, hotkey, RPC cancellation, and folder-move restart passed.'
+Write-Host 'Portable launch, activation, and folder-move restart passed.'

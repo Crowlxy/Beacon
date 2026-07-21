@@ -36,6 +36,12 @@ public sealed class AppSearchProvider : ISearchProvider, IDisposable
     public Task RefreshIfWatcherUnavailableAsync() =>
         _initialized && _watchersHealthy ? Task.CompletedTask : EnsureCacheAsync(true, CancellationToken.None);
 
+    public async Task<IReadOnlyList<SearchResultDto>> BrowseAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureCacheAsync(false, cancellationToken);
+        lock (_cacheGate) return _cache.Values.ToArray();
+    }
+
     private async Task EnsureCacheAsync(bool force, CancellationToken cancellationToken)
     {
         await _buildGate.WaitAsync(cancellationToken);
