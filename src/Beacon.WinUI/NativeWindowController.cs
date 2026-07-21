@@ -174,6 +174,7 @@ internal sealed class NativeWindowController : IDisposable
 internal static class NativeMethods
 {
     private const int DwmWindowCornerPreference = 33;
+    private const int DwmCornerDoNotRound = 1;
     private const int DwmCornerRound = 2;
     private const int DwmBorderColor = 34;
     private const int DwmColorNone = unchecked((int)0xFFFFFFFE);
@@ -202,7 +203,7 @@ internal static class NativeMethods
             (SetWindowLongPtrW(windowHandle, WindowStyleIndex, styleWithoutFrame) != IntPtr.Zero &&
              SetWindowPos(windowHandle, IntPtr.Zero, 0, 0, 0, 0, FrameChangedFlags));
         var nonClientPolicy = DwmNonClientRenderingDisabled;
-        var preference = DwmCornerRound;
+        var preference = DwmCornerDoNotRound;
         var borderColor = DwmColorNone;
         var nonClientDisabled = DwmSetWindowAttribute(
             windowHandle,

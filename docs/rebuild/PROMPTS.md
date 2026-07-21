@@ -122,7 +122,7 @@ Phase R4プロンプトと同一（AGENTS.md固定ルール優先。コミット
 ```
 
 ---
-
+mm
 ## 統合Phase R5: 完成フェーズ（デスクトップ統合+プロバイダー/ランキング+Beacon固有UX）プロンプト
 
 前提: R4完了（Gate B承認）と、R4差分のコミット・PR・mainマージが済んでいることをユーザーへ確認してから着手する。実装ブランチは `feature/rebuild-r5-integrated`。本フェーズ後に**Gate C（拡張）**レビュー（実Release ZIPをクリーン環境で確認）がある。
