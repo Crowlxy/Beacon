@@ -9,8 +9,6 @@ namespace Beacon.Platform.Windows;
 public sealed partial class WindowsIndexSearch(Action<string>? log = null) : IDisposable
 {
     public const string ConnectionString = "Provider=Search.CollatorDSO;Extended Properties='Application=Windows';";
-    private readonly SemaphoreSlim _connectionLock = new(1, 1);
-    private OleDbConnection? _connection;
 
     [GeneratedRegex(@"^[`\@\＠\#\＃\＊\^,\&\＆/\\\$\%_;\[\]]+$")]
     private static partial Regex ReservedOnly();
@@ -48,71 +46,44 @@ public sealed partial class WindowsIndexSearch(Action<string>? log = null) : IDi
         string sql,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await _connectionLock.WaitAsync(cancellationToken);
+        await using var connection = new OleDbConnection(ConnectionString);
+        OleDbCommand command;
+        System.Data.Common.DbDataReader reader;
         try
         {
-            OleDbCommand? command = null;
-            System.Data.Common.DbDataReader? reader = null;
-            for (var attempt = 0; attempt < 2; attempt++)
-            {
-                try
-                {
-                    _connection ??= new OleDbConnection(ConnectionString);
-                    if (_connection.State != System.Data.ConnectionState.Open)
-                        await _connection.OpenAsync(cancellationToken);
-                    command = new OleDbCommand(sql, _connection);
-                    reader = await command.ExecuteReaderAsync(cancellationToken);
-                    break;
-                }
-                catch (OleDbException exception)
-                {
-                    command?.Dispose();
-                    command = null;
-                    ResetConnection();
-                    if (attempt == 1) log?.Invoke($"INFO Windows Index unavailable: {exception.Message}");
-                }
-            }
-            if (reader is null || command is null) yield break;
-            await using (command)
-            await using (reader)
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                if (reader.GetValue(0) is not string fileName ||
-                    reader.GetValue(1) is not string itemUrl ||
-                    reader.GetValue(2) is not string itemType ||
-                    string.Equals(itemUrl, "file:", StringComparison.OrdinalIgnoreCase)) continue;
-                var path = ItemUrlToPath(itemUrl);
-                var kind = ItemTypeToKind(itemType);
-                yield return new SearchResultDto
-                {
-                    Id = path,
-                    ProviderId = FileSearchProvider.Id,
-                    Title = fileName,
-                    Subtitle = path,
-                    Kind = kind,
-                    Icon = ShellImageService.ForPath(path, kind == ResultKind.Folder),
-                    FilePath = path,
-                    ExecutionToken = path,
-                    CopyText = path,
-                };
-            }
+            await connection.OpenAsync(cancellationToken);
+            command = new OleDbCommand(sql, connection);
+            reader = await command.ExecuteReaderAsync(cancellationToken);
         }
-        finally
+        catch (OleDbException exception)
         {
-            _connectionLock.Release();
+            log?.Invoke($"INFO Windows Index unavailable: {exception.Message}");
+            yield break;
+        }
+        await using (command)
+        await using (reader)
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (reader.GetValue(0) is not string fileName ||
+                reader.GetValue(1) is not string itemUrl ||
+                reader.GetValue(2) is not string itemType ||
+                string.Equals(itemUrl, "file:", StringComparison.OrdinalIgnoreCase)) continue;
+            var path = ItemUrlToPath(itemUrl);
+            var kind = ItemTypeToKind(itemType);
+            yield return new SearchResultDto
+            {
+                Id = path,
+                ProviderId = FileSearchProvider.Id,
+                Title = fileName,
+                Subtitle = path,
+                Kind = kind,
+                Icon = ShellImageService.ForPath(path, kind == ResultKind.Folder),
+                FilePath = path,
+                ExecutionToken = path,
+                CopyText = path,
+            };
         }
     }
 
-
-    public void Dispose()
-    {
-        ResetConnection();
-        _connectionLock.Dispose();
-    }
-
-    private void ResetConnection()
-    {
-        _connection?.Dispose();
-        _connection = null;
-    }
+    public void Dispose() { }
 }

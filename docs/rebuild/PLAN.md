@@ -134,6 +134,8 @@ A〜Dが自己起因で体感遅延の大半を占める。E〜Gは副次。
 
 **Gate（軽量レビュー）**: 旧版との体感比較とPERFログのしきい値超過が無いことを確認する。**Gate D（リリース）の前提**とする。
 
+**Gate判定: 承認（2026-07-22）**。Stage 1の実測に基づき、結果確定時だけHWNDを1回リサイズし、角丸リージョンも目標寸法へ1回適用する方式を採用。結果一覧は1入力につき全プロバイダー完了後に1回だけ確定表示し、途中結果との差し替えを廃止した。白フラッシュ、枠・角丸、一覧先頭表示、展開・収縮はユーザー目視承認済み。Portableスモーク実測は `HotkeyToDisplayMs=27.9`、`InputToFirstResultMs=21.4`、`DroppedFrames=0`。Stage 4は表示経路の残課題ではなく、追加変更の効果が未確認のため不採用。
+
 ## Phase R7: 設定・データ移行
 
 作業: 新設定スキーマ / **設定画面UI（SPEC §6.6・§7.6）: グローバルホットキー変更（既定Alt+Space）・Quick Key編集・個人化/クリップボードのON/OFFと全リセット（R5でトレイのみ→設定画面へ）・Everything未起動の一度きり案内** / Legacy importer（`%APPDATA%\Beacon` → `<BeaconRoot>\Data`、[MIGRATION.md](MIGRATION.md)）/ プラグイン移行 / 履歴移行 / バックアップ・ロールバック / 移行バージョン管理 / 旧版との競合防止 / About・Third-party notices。

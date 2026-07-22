@@ -163,7 +163,6 @@ public sealed partial class MainWindow
         {
             var pending = new List<SearchResultDto>();
             SearchResultDto[] visible = [];
-            var visibleCount = 0;
             var maximumVisibleCount = (int)Application.Current.Resources["MaximumResultCount"];
             if (_queryScope?.IsClipboard == true) { ApplyClipboardResults(); return; }
             var scope = _queryScope?.ProviderScope ?? (_viewState.BrowseCategory switch
@@ -186,14 +185,11 @@ public sealed partial class MainWindow
                 pending.RemoveAll(item => item.Id == result.Id);
                 pending.Add(result);
                 visible = pending.OrderByDescending(item => item.Score).ToArray();
-                var nextVisibleCount = Math.Min(visible.Length, maximumVisibleCount);
-                ScheduleResults(visible, displayedQuery, nextVisibleCount);
-                if (nextVisibleCount == visibleCount) continue;
-                visibleCount = nextVisibleCount;
-                resizeRequests++;
             }
             if (!string.Equals(displayedQuery, QueryBox.Text, StringComparison.Ordinal)) return;
-            if (visible.Length == 0) ScheduleResults([], displayedQuery, 0);
+            var visibleCount = Math.Min(visible.Length, maximumVisibleCount);
+            ScheduleResults(visible, displayedQuery, visibleCount);
+            if (visibleCount > 0) resizeRequests++;
         }
         catch (OperationCanceledException) { }
         catch (Exception exception) { R1Storage.WriteLog($"ERROR Search failed: {exception.Message}"); }
