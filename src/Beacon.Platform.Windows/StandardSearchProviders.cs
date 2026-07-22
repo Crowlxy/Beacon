@@ -62,6 +62,8 @@ public sealed class BrowserBookmarkProvider : ISearchProvider
     private readonly Lazy<Task<Bookmark[]>> _bookmarks = new(() => Task.Run(BookmarkLoader.Load));
     public string ProviderId => Id;
 
+    public void Preload() => _ = _bookmarks.Value;
+
     public async IAsyncEnumerable<SearchResultDto> SearchAsync(SearchRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (request.Scope is not (QueryScope.All or QueryScope.Url) || request.RawQuery.Trim().Length < 2) yield break;

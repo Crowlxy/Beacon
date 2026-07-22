@@ -118,6 +118,16 @@ public static partial class ClipboardTextService
 
 public static class ShellImageService
 {
+    private static readonly HashSet<string> ThumbnailExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".svg", ".tif", ".tiff", ".webp",
+        ".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm", ".wmv", ".pdf",
+    };
+
     public static IconDescriptor Icon(string path) => new(IconSource.FileShellIcon, Path.GetFullPath(path));
     public static IconDescriptor Thumbnail(string path) => new(IconSource.FileThumbnail, Path.GetFullPath(path));
+    public static IconDescriptor ForPath(string path, bool isFolder = false) =>
+        new(isFolder || !ThumbnailExtensions.Contains(Path.GetExtension(path))
+            ? IconSource.FileShellIcon
+            : IconSource.FileThumbnail, path);
 }

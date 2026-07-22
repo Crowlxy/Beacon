@@ -7,7 +7,6 @@ using Beacon.Platform.Windows;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage;
-using Windows.Storage.FileProperties;
 
 namespace Beacon.WinUI;
 
@@ -26,6 +25,7 @@ internal sealed class IconResolver
         {
             if (descriptor.Source == IconSource.UriOrDataUri) return new BitmapImage(new Uri(descriptor.Value));
             if (descriptor.Source == IconSource.FileShellIcon) return await ResolveShellIconAsync(descriptor.Value);
+            if (descriptor.Source == IconSource.FileThumbnail) return await ResolveShellThumbnailAsync(descriptor.Value);
             var file = await StorageFile.GetFileFromPathAsync(Path.GetFullPath(descriptor.Value));
             if (descriptor.Source == IconSource.FilePath)
             {
@@ -34,17 +34,7 @@ internal sealed class IconResolver
                 await bitmap.SetSourceAsync(stream);
                 return bitmap;
             }
-            try
-            {
-                using var thumbnail = await file.GetThumbnailAsync(ThumbnailMode.PicturesView);
-                var image = new BitmapImage();
-                await image.SetSourceAsync(thumbnail);
-                return image;
-            }
-            catch (Exception exception) when (IsExpectedFailure(exception))
-            {
-                return await ResolveShellIconAsync(descriptor.Value);
-            }
+            return await ResolveShellIconAsync(descriptor.Value);
         }
         catch (Exception exception) when (IsExpectedFailure(exception)) { return null; }
     }
@@ -52,6 +42,16 @@ internal sealed class IconResolver
     private static async Task<ImageSource> ResolveShellIconAsync(string path)
     {
         var pixels = await Task.Run(() => ShellIconService.GetIcon(path));
+        var bitmap = new WriteableBitmap(pixels.Width, pixels.Height);
+        using var stream = bitmap.PixelBuffer.AsStream();
+        await stream.WriteAsync(pixels.BgraPixels);
+        bitmap.Invalidate();
+        return bitmap;
+    }
+
+    private static async Task<ImageSource> ResolveShellThumbnailAsync(string path)
+    {
+        var pixels = await Task.Run(() => ShellIconService.GetThumbnail(path));
         var bitmap = new WriteableBitmap(pixels.Width, pixels.Height);
         using var stream = bitmap.PixelBuffer.AsStream();
         await stream.WriteAsync(pixels.BgraPixels);

@@ -25,7 +25,11 @@ public sealed class AppSearchProvider : ISearchProvider, IDisposable
         await EnsureCacheAsync(false, cancellationToken);
         SearchResultDto[] matches;
         lock (_cacheGate)
-            matches = _cache.Values.Where(item => item.Title.Contains(request.RawQuery, StringComparison.CurrentCultureIgnoreCase)).ToArray();
+            matches = _cache.Values
+                .Select(item => (Item: item, Score: MatchScore(request.RawQuery, item.Title)))
+                .Where(match => match.Score > 0)
+                .Select(match => match.Item with { Score = match.Score })
+                .ToArray();
         foreach (var item in matches)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -68,6 +72,7 @@ public sealed class AppSearchProvider : ISearchProvider, IDisposable
             if (!Directory.Exists(root)) continue;
             foreach (var shortcut in EnumerateShortcuts(root)) results.Add(CreateResult(shortcut));
         }
+        results.AddRange(UWPPackage.All().Select(CreateResult));
         return results;
     }
 
@@ -87,6 +92,47 @@ public sealed class AppSearchProvider : ISearchProvider, IDisposable
             ExecutionToken = shortcut,
             AutoCompleteText = name,
         };
+    }
+
+    private static SearchResultDto CreateResult(UWPPackage app) => new()
+    {
+        Id = app.Path,
+        ProviderId = Id,
+        Title = app.Name,
+        Subtitle = "Windows app",
+        Kind = ResultKind.Application,
+        Icon = new(IconSource.FileShellIcon, app.Path),
+        FilePath = app.Path,
+        ExecutionToken = app.Path,
+        AutoCompleteText = app.Name,
+    };
+
+    internal static double MatchScore(string query, string candidate)
+    {
+        query = query.Trim();
+        if (query.Length == 0 || candidate.Length == 0) return 0;
+        if (string.Equals(candidate, query, StringComparison.OrdinalIgnoreCase)) return 100;
+        var index = candidate.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+        if (index >= 0) return 90 - Math.Min(index, 20);
+
+        var initials = new string(candidate.Where((character, position) =>
+            position == 0 || char.IsWhiteSpace(candidate[position - 1]) || char.IsUpper(character)).ToArray());
+        if (initials.Contains(query, StringComparison.OrdinalIgnoreCase)) return 70;
+
+        var searchAt = 0;
+        var first = -1;
+        var last = -1;
+        foreach (var character in query.Where(character => !char.IsWhiteSpace(character)))
+        {
+            var found = candidate.IndexOf(character.ToString(), searchAt, StringComparison.OrdinalIgnoreCase);
+            if (found < 0) return 0;
+            if (first < 0) first = found;
+            last = found;
+            searchAt = found + 1;
+        }
+        var span = last - first + 1;
+        var score = 100d * query.Count(character => !char.IsWhiteSpace(character)) / (first + span + 1);
+        return score >= 50 ? score : 0;
     }
 
     private void StartWatchers()

@@ -21,6 +21,15 @@ public sealed class PlatformSearchTests
         });
     }
 
+    [TestCase("report.xlsx", IconSource.FileShellIcon)]
+    [TestCase("report.lnk", IconSource.FileShellIcon)]
+    [TestCase("archive.7z", IconSource.FileShellIcon)]
+    [TestCase("photo.png", IconSource.FileThumbnail)]
+    [TestCase("movie.mp4", IconSource.FileThumbnail)]
+    [TestCase("document.pdf", IconSource.FileThumbnail)]
+    public void FileVisualUsesExplorerIconExceptPreviewableMedia(string path, IconSource expected) =>
+        Assert.That(ShellImageService.ForPath(path).Source, Is.EqualTo(expected));
+
     [Test]
     public void EverythingOptionsRejectNegativeBounds()
     {

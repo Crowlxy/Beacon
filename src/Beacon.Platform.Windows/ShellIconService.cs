@@ -8,16 +8,26 @@ public sealed record ShellIconPixels(int Width, int Height, byte[] BgraPixels);
 public static class ShellIconService
 {
     private const uint IconOnly = 0x00000004;
-    private const uint BiggerSizeOk = 0x00000001;
+    private const uint ThumbnailOnly = 0x00000008;
 
-    public static ShellIconPixels GetIcon(string path, int size = 32)
+    public static ShellIconPixels GetIcon(string path, int size = 32) =>
+        GetImage(path, size, Directory.Exists(path) ? IconOnly : 0);
+
+    public static ShellIconPixels GetThumbnail(string path, int size = 32)
+    {
+        try { return GetImage(path, size, ThumbnailOnly); }
+        catch (COMException) { return GetImage(path, size, IconOnly); }
+    }
+
+    private static ShellIconPixels GetImage(string path, int size, uint flags)
     {
         var id = typeof(IShellItemImageFactory).GUID;
-        Marshal.ThrowExceptionForHR(SHCreateItemFromParsingName(Path.GetFullPath(path), IntPtr.Zero, ref id, out var factory));
+        var shellPath = path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) ? path : Path.GetFullPath(path);
+        Marshal.ThrowExceptionForHR(SHCreateItemFromParsingName(shellPath, IntPtr.Zero, ref id, out var factory));
         try
         {
             var requested = new Size { Width = size, Height = size };
-            Marshal.ThrowExceptionForHR(factory.GetImage(requested, IconOnly | BiggerSizeOk, out var bitmap));
+            Marshal.ThrowExceptionForHR(factory.GetImage(requested, flags, out var bitmap));
             try { return ReadBitmap(bitmap); }
             finally { _ = DeleteObject(bitmap); }
         }

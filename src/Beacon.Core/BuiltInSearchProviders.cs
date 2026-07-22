@@ -175,12 +175,12 @@ public sealed class WebSearchProvider : ISearchProvider
     {
         if (request.Scope is not (QueryScope.All or QueryScope.WebSearch) || string.IsNullOrWhiteSpace(request.RawQuery)) yield break;
         cancellationToken.ThrowIfCancellationRequested();
-        var uri = "https://www.bing.com/search?q=" + Uri.EscapeDataString(request.RawQuery.Trim());
+        var uri = "https://www.google.com/search?q=" + Uri.EscapeDataString(request.RawQuery.Trim());
         yield return new SearchResultDto
         {
             Id = $"web:{request.RawQuery}", ProviderId = Id, Title = $"Search the web for “{request.RawQuery.Trim()}”",
-            Subtitle = "Bing", Kind = ResultKind.WebSearch, Score = FallbackScore,
-            Icon = new(IconSource.FluentGlyph, "\uE721"), ExecutionToken = uri,
+            Subtitle = "Google", Kind = ResultKind.WebSearch, Score = FallbackScore,
+            Icon = new(IconSource.UriOrDataUri, "https://www.google.com/favicon.ico"), ExecutionToken = uri,
         };
         await Task.CompletedTask;
     }

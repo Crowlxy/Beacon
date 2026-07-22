@@ -4,8 +4,9 @@ using Beacon.Platform.Windows.Everything;
 
 namespace Beacon.Platform.Windows;
 
-public sealed class FileSearchProvider(Action<string>? log = null) : ISearchProvider
+public sealed class FileSearchProvider(Action<string>? log = null) : ISearchProvider, IDisposable
 {
+    private readonly WindowsIndexSearch _windowsIndex = new(log);
     public const string Id = "windows.files";
     public string ProviderId => Id;
 
@@ -20,7 +21,7 @@ public sealed class FileSearchProvider(Action<string>? log = null) : ISearchProv
         if (availability.Available) log?.Invoke("INFO File search route: Everything");
         var search = availability.Available
             ? new EverythingSearchManager(log).SearchAsync(request.RawQuery, availabilityConfirmed: true, cancellationToken: cancellationToken)
-            : new WindowsIndexSearch(log).SearchAsync(request.RawQuery, cancellationToken);
+            : _windowsIndex.SearchAsync(request.RawQuery, cancellationToken);
         if (!availability.Available) log?.Invoke($"INFO {availability.Reason} Using Windows Index.");
         await foreach (var result in search)
         {
@@ -29,6 +30,9 @@ public sealed class FileSearchProvider(Action<string>? log = null) : ISearchProv
             yield return result;
         }
     }
+
+
+    public void Dispose() => _windowsIndex.Dispose();
 }
 
 public static class WindowsRecentFiles

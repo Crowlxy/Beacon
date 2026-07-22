@@ -43,6 +43,9 @@ public sealed class BuiltInSearchProviderTests
             Assert.That(result.Kind, Is.EqualTo(ResultKind.WebSearch));
             Assert.That(result.Score, Is.EqualTo(WebSearchProvider.FallbackScore));
             Assert.That(result.Score, Is.LessThan(0));
+            Assert.That(result.Subtitle, Is.EqualTo("Google"));
+            Assert.That(result.ExecutionToken, Does.StartWith("https://www.google.com/search?"));
+            Assert.That(result.Icon.Source, Is.EqualTo(IconSource.UriOrDataUri));
         });
     }
 

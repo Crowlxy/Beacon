@@ -19,23 +19,27 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly NativeWindowController _nativeWindow;
     private readonly UsageHistoryStore _usageHistory;
     private readonly ClipboardHistoryService _clipboardHistory;
+    private readonly FileSearchProvider _fileSearchProvider;
+    private readonly BrowserBookmarkProvider _bookmarkProvider;
     private bool _exiting;
 
     public MainWindow(string dataRoot)
     {
         _dataRoot = dataRoot;
         _appSearchProvider = new AppSearchProvider();
+        _fileSearchProvider = new FileSearchProvider(R1Storage.WriteLog);
+        _bookmarkProvider = new BrowserBookmarkProvider();
         _usageHistory = new UsageHistoryStore(dataRoot, R1Storage.WriteLog);
         _usageHistory.Enabled = R1Storage.GetBoolean("PersonalizationEnabled", true);
         _orchestrator = new QueryOrchestrator(
             [
                 _appSearchProvider,
-                new FileSearchProvider(R1Storage.WriteLog),
+                _fileSearchProvider,
                 new CalculatorSearchProvider(),
                 new UrlSearchProvider(),
                 new WebSearchProvider(),
                 new WindowsSettingsProvider(),
-                new BrowserBookmarkProvider(),
+                _bookmarkProvider,
                 new SystemActionSearchProvider(),
                 new ShellSearchProvider(),
                 new ProcessKillerSearchProvider(),
@@ -66,6 +70,8 @@ public sealed partial class MainWindow : Window, IDisposable
             ResetPersonalization,
             _clipboardHistory.OnClipboardUpdate);
         InitializeLauncher(windowHandle);
+        _ = RefreshAppCacheAsync();
+        _bookmarkProvider.Preload();
         R1Storage.WriteLog("INFO Hotkey and tray registered");
     }
 
@@ -218,6 +224,7 @@ public sealed partial class MainWindow : Window, IDisposable
         _runningCancellation?.Dispose();
         _orchestrator.Dispose();
         _clipboardHistory.Dispose();
+        _fileSearchProvider.Dispose();
         _appSearchProvider.Dispose();
         _nativeWindow.Dispose();
     }

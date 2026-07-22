@@ -77,6 +77,9 @@
                 IsItemClickEnabled="True"
                 ItemClick="OnResultClicked"
                 SelectionMode="Single">
+                <ListView.ItemContainerTransitions>
+                    <TransitionCollection />
+                </ListView.ItemContainerTransitions>
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -96,7 +99,7 @@
                             </Grid.ColumnDefinitions>
                             <Border Width="{StaticResource ResultIconSize}" Height="{StaticResource ResultIconSize}" Margin="{StaticResource ResultIconMargin}" CornerRadius="{StaticResource ResultIconCornerRadius}">
                                 <Grid>
-                                    <FontIcon FontFamily="Segoe Fluent Icons" FontSize="{StaticResource ResultIconSize}" Glyph="{Binding Glyph}" Visibility="{Binding GlyphVisibility}" />
+                                    <FontIcon FontFamily="Segoe Fluent Icons" FontSize="{StaticResource ResultGlyphSize}" Glyph="{Binding Glyph}" Visibility="{Binding GlyphVisibility}" />
                                     <Image Source="{Binding Image}" Stretch="Uniform" Visibility="{Binding ImageVisibility}" />
                                 </Grid>
                             </Border>

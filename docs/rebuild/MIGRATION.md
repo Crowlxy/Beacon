@@ -1,4 +1,4 @@
-# MIGRATION — 旧WPF版（Beacon-old）からのデータ移行（Phase R9）
+# MIGRATION — 旧WPF版（Beacon-old）からのデータ移行（Phase R7）
 
 ## 1. 移行元と移行先
 

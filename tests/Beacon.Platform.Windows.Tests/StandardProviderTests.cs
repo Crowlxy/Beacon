@@ -14,6 +14,16 @@ public sealed class StandardProviderTests
         Assert.That(results, Has.Some.Property(nameof(SearchResultDto.ExecutionToken)).StartsWith("ms-settings:"));
     }
 
+    [TestCase("メモ", "メモ帳")]
+    [TestCase("vsc", "Visual Studio Code")]
+    [TestCase("studio code", "Visual Studio Code")]
+    public void ApplicationMatchingIncludesLocalizedAndFuzzyNames(string query, string candidate) =>
+        Assert.That(AppSearchProvider.MatchScore(query, candidate), Is.GreaterThan(0));
+
+    [Test]
+    public void ApplicationMatchingRejectsUnrelatedNames() =>
+        Assert.That(AppSearchProvider.MatchScore("メモ", "電卓"), Is.Zero);
+
     [Test]
     public async Task ShellRequiresPrefixAndReturnsCommand()
     {

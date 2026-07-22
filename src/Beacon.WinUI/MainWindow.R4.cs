@@ -9,7 +9,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.Graphics;
 using Windows.System;
-using Windows.UI.ViewManagement;
 
 namespace Beacon.WinUI;
 
@@ -19,12 +18,15 @@ public sealed partial class MainWindow
     private readonly QueryOrchestrator _orchestrator;
     private readonly ObservableCollection<ResultRow> _results = [];
     private readonly IconResolver _icons = new();
-    private readonly UISettings _uiSettings = new();
     private bool _composing;
     private string? _activeProcessName;
     private string? _activeFolder;
     private nint _windowHandle;
-    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _resizeTimer;
+    private int _pendingVisibleCount;
+    private SearchResultDto[] _pendingResults = [];
+    private string _pendingResultsQuery = string.Empty;
+    private bool _resultsUpdateScheduled;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _resultsResizeTimer;
 
     private static double Token(string key) => (double)Application.Current.Resources[key];
     private static int Pixels(double dip, uint dpi) => (int)Math.Round(dip * dpi / 96d);
@@ -51,8 +53,6 @@ public sealed partial class MainWindow
     {
         var started = Stopwatch.GetTimestamp();
         _activeProcessName = ActiveWindowService.GetProcessName();
-        _activeFolder = ExplorerPathService.GetCurrentPath();
-        _ = RefreshAppCacheAsync();
         _viewState.Reset();
         QueryBox.Text = string.Empty;
         ApplyResults([]);
@@ -66,6 +66,10 @@ public sealed partial class MainWindow
         DispatcherQueue.TryEnqueue(() => QueryBox.Focus(FocusState.Programmatic));
         R1Storage.WriteLog($"PERF HotkeyToDisplayMs={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1}");
         R1Storage.WriteLog("INFO Hotkey or activation pipe displayed the AppWindow");
+        _activeFolder = null;
+        _ = RefreshActiveFolderAsync();
+        _ = RefreshAppCacheAsync();
+        _bookmarkProvider.Preload();
     }
 
     private void RepositionLauncher()
@@ -89,6 +93,12 @@ public sealed partial class MainWindow
         catch (Exception exception) { R1Storage.WriteLog($"ERROR App cache refresh failed: {exception.Message}"); }
     }
 
+    private async Task RefreshActiveFolderAsync()
+    {
+        try { _activeFolder = await Task.Run(ExplorerPathService.GetCurrentPath); }
+        catch (Exception exception) { R1Storage.WriteLog($"ERROR Explorer path refresh failed: {exception.Message}"); }
+    }
+
     private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
     {
         if (SystemBackdrop is ThinDesktopAcrylicBackdrop acrylic)
@@ -104,11 +114,14 @@ public sealed partial class MainWindow
     {
         QueryPlaceholder.Visibility = QueryBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateGhostCompletion(QueryBox.Text);
-        if (!_composing && _viewState.State != LauncherViewState.ActionInput) StartSearch(QueryBox.Text);
+        if (_viewState.State == LauncherViewState.ActionInput) return;
+        StartSearch(QueryBox.Text);
     }
 
     private void StartSearch(string query)
     {
+        _resultsResizeTimer?.Stop();
+        _resultsUpdateScheduled = false;
         if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory == BrowseCategory.Actions)
         {
             ApplyActionResults(query);
@@ -137,8 +150,6 @@ public sealed partial class MainWindow
             }
             return;
         }
-        ApplyResults([]);
-        ResizeForResults(0);
         TryQuickKey(query, out var searchText, out _);
         _ = SearchAsync(searchText, query);
     }
@@ -147,9 +158,13 @@ public sealed partial class MainWindow
     {
         var started = Stopwatch.GetTimestamp();
         var firstResult = true;
+        var resizeRequests = 0;
         try
         {
             var pending = new List<SearchResultDto>();
+            SearchResultDto[] visible = [];
+            var visibleCount = 0;
+            var maximumVisibleCount = (int)Application.Current.Resources["MaximumResultCount"];
             if (_queryScope?.IsClipboard == true) { ApplyClipboardResults(); return; }
             var scope = _queryScope?.ProviderScope ?? (_viewState.BrowseCategory switch
             {
@@ -170,17 +185,25 @@ public sealed partial class MainWindow
                 }
                 pending.RemoveAll(item => item.Id == result.Id);
                 pending.Add(result);
-                var visible = pending.OrderByDescending(item => item.Score)
-                    .Take((int)Application.Current.Resources["MaximumResultCount"]).ToArray();
-                ApplyResults(visible);
-                ResizeForResults(visible.Length);
+                visible = pending.OrderByDescending(item => item.Score).ToArray();
+                var nextVisibleCount = Math.Min(visible.Length, maximumVisibleCount);
+                ScheduleResults(visible, displayedQuery, nextVisibleCount);
+                if (nextVisibleCount == visibleCount) continue;
+                visibleCount = nextVisibleCount;
+                resizeRequests++;
             }
+            if (!string.Equals(displayedQuery, QueryBox.Text, StringComparison.Ordinal)) return;
+            if (visible.Length == 0) ScheduleResults([], displayedQuery, 0);
         }
         catch (OperationCanceledException) { }
         catch (Exception exception) { R1Storage.WriteLog($"ERROR Search failed: {exception.Message}"); }
+        finally
+        {
+            R1Storage.WriteLog($"PERF QueryResizeRequests={resizeRequests} QueryLength={displayedQuery.Length}");
+        }
     }
 
-    private void ApplyResults(SearchResultDto[] visible)
+    private void ApplyResults(SearchResultDto[] visible, bool resolveIcons = true)
     {
         var changed = false;
         for (var index = 0; index < visible.Length; index++)
@@ -190,7 +213,7 @@ public sealed partial class MainWindow
                 if (_results[index].Update(visible[index]))
                 {
                     changed = true;
-                    _ = ResolveIconAsync(_results[index]);
+                    if (resolveIcons) _ = ResolveIconAsync(_results[index]);
                 }
                 continue;
             }
@@ -200,13 +223,13 @@ public sealed partial class MainWindow
             if (existing >= 0)
             {
                 _results.Move(existing, index);
-                if (_results[index].Update(visible[index])) _ = ResolveIconAsync(_results[index]);
+                if (_results[index].Update(visible[index]) && resolveIcons) _ = ResolveIconAsync(_results[index]);
             }
             else
             {
                 var row = new ResultRow(visible[index]);
                 _results.Insert(index, row);
-                _ = ResolveIconAsync(row);
+                if (resolveIcons) _ = ResolveIconAsync(row);
             }
             changed = true;
         }
@@ -286,37 +309,42 @@ public sealed partial class MainWindow
         AnimateResize(width, Pixels(targetDip, dpi));
     }
 
+    private void ScheduleResults(SearchResultDto[] results, string displayedQuery, int visibleCount)
+    {
+        _pendingResults = results;
+        _pendingResultsQuery = displayedQuery;
+        _pendingVisibleCount = visibleCount;
+        if (_resultsUpdateScheduled) return;
+        _resultsResizeTimer ??= DispatcherQueue.CreateTimer();
+        _resultsResizeTimer.IsRepeating = false;
+        _resultsResizeTimer.Interval = TimeSpan.FromMilliseconds(Token("AnimationFrameMilliseconds"));
+        _resultsResizeTimer.Tick -= OnResultsResizeTimerTick;
+        _resultsResizeTimer.Tick += OnResultsResizeTimerTick;
+        _resultsUpdateScheduled = true;
+        _resultsResizeTimer.Start();
+    }
+
+    private void OnResultsResizeTimerTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        _resultsUpdateScheduled = false;
+        if (!string.Equals(_pendingResultsQuery, QueryBox.Text, StringComparison.Ordinal)) return;
+        ApplyResults(_pendingResults, false);
+        _ = Task.WhenAll(_results.Select(ResolveIconAsync));
+        ResizeForResults(_pendingVisibleCount);
+    }
+
     private void AnimateResize(int width, int target)
     {
         var start = _appWindow.Size.Height;
-        _resizeTimer?.Stop();
-        _resizeTimer = null;
-        if (!_uiSettings.AnimationsEnabled || start == target || start == 0)
-        {
-            ResizeWindow(width, target);
-            return;
-        }
-        var watch = Stopwatch.StartNew();
-        var duration = Token("PanelAnimationMilliseconds");
-        var decay = Token("PanelAnimationDecay");
-        _resizeTimer = DispatcherQueue.CreateTimer();
-        _resizeTimer.Interval = TimeSpan.FromMilliseconds(Token("AnimationFrameMilliseconds"));
-        _resizeTimer.Tick += (_, _) =>
-        {
-            var progress = Math.Min(1d, watch.Elapsed.TotalMilliseconds / duration);
-            var eased = progress == 1d ? 1d : 1d - Math.Exp(-decay * progress);
-            ResizeWindow(width, (int)Math.Round(start + ((target - start) * eased)));
-            if (progress < 1d) return;
-            _resizeTimer.Stop();
-            _resizeTimer = null;
-        };
-        _resizeTimer.Start();
+        if (start == target) return;
+        ResizeWindow(width, target);
+        ApplyWindowRegion(width, target, NativeMethods.GetDpiForWindow(_windowHandle));
+        R1Storage.WriteLog($"PERF Resize direction={(target > start ? "expand" : "collapse")} AppWindowResizeCalls=1 SetWindowRgnCalls=1 Frames=0 DroppedFrames=0 MaxFrameMs=0.0");
     }
 
     private void ResizeWindow(int width, int height)
     {
         _appWindow.Resize(new SizeInt32(width, height));
-        ApplyWindowRegion(width, height, NativeMethods.GetDpiForWindow(_windowHandle));
     }
 
     private void ApplyWindowRegion(int width, int height, uint dpi)

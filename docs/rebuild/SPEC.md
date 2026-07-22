@@ -133,7 +133,7 @@ LauncherViewState: Search / Browse / ContextActions / ActionInput / Confirmation
 - 状態遷移: `Search → ActionSelected → ParameterInput(多段) → Confirmation → Running → Complete`
 - **破壊的操作（名前変更・移動・削除系）は Confirmation 必須**
 - 内蔵アクション v1（10個）: 開く / 保存場所を表示 / パスをコピー / 管理者として実行 / 名前変更 / コピー / 移動 / ZIP圧縮 / この場所でターミナル / 既定アプリで開く（画像変換・PDF加工・AIは対象外）
-- Quick Keys 既定: `rf`=保存場所を表示 / `cp`=パスをコピー / `rn`=名前変更 / `term`=この場所でターミナル。UIは結果行右端の小さなピルバッジ+検索フィールドのゴースト補完。**編集UIはR9**（R5では既定値固定、定義はDataRoot配下の設定ファイル）
+- Quick Keys 既定: `rf`=保存場所を表示 / `cp`=パスをコピー / `rn`=名前変更 / `term`=この場所でターミナル。UIは結果行右端の小さなピルバッジ+検索フィールドのゴースト補完。**編集UIはR7**（R5では既定値固定、定義はDataRoot配下の設定ファイル）
 
 ### 7.5 クリップボード履歴
 
@@ -146,7 +146,7 @@ LauncherViewState: Search / Browse / ContextActions / ActionInput / Confirmation
 | 暗号化 | DPAPI `DataProtectionScope.CurrentUser` |
 | 重複 | 内容ハッシュで除外。Beacon自身の貼り付けを再登録しない |
 | 除外 | パスワードマネージャー等の除外フォーマット（`ExcludeClipboardContentFromMonitorProcessing` 等）を尊重 |
-| 操作 | 個別削除 / 全削除（復元不可） / 一時停止。除外アプリ指定のUIはR9（データ形式のみ用意） |
+| 操作 | 個別削除 / 全削除（復元不可） / 一時停止。除外アプリ指定のUIはR7（データ形式のみ用意） |
 
 監視は `AddClipboardFormatListener`（Platform.Windows内のサービス。UIコードへ直接埋め込まない）。「AIでパスワードらしさを推測して除外」のような曖昧な保護は採用しない。
 
@@ -155,7 +155,7 @@ LauncherViewState: Search / Browse / ContextActions / ActionInput / Confirmation
 - 保存する: 結果ID / 選択回数 / 最終選択日時 / 使用時のアクティブプロセス名 / 使用モード
 - 保存しない: 画面キャプチャ / キー入力全文 / ファイル内容 / 一切のクラウド送信
 - §4スコア表の使用履歴項目（24時間+120 / 7日+60 / 選択回数最大+180 / 現在アプリ・フォルダ関連 各+80）の入力源。すべてローカル処理
-- **全リセットと個人化OFFを必須機能とする**（R5ではトレイメニューから。設定画面はR9）
+- **全リセットと個人化OFFを必須機能とする**（R5ではトレイメニューから。設定画面はR7）
 
 ### 7.7 プレビューの新データ契約【対象外 2026-07-20】
 

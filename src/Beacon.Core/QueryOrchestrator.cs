@@ -55,7 +55,9 @@ public sealed class QueryOrchestrator(
             SingleWriter = false,
         });
         var producers = _providers
-            .Select(provider => ProduceWithinDeadlineAsync(provider, request, channel.Writer, cancellation.Token))
+            .Select(provider => Task.Run(
+                () => ProduceWithinDeadlineAsync(provider, request, channel.Writer, cancellation.Token),
+                CancellationToken.None))
             .ToArray();
         _ = CompleteAsync(producers, channel.Writer);
 

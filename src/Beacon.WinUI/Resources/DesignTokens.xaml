@@ -19,7 +19,7 @@
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="LauncherFallbackBrush" Color="#CC202020" />
-            <SolidColorBrush x:Key="LauncherTintBrush" Color="#33000000" />
+            <SolidColorBrush x:Key="LauncherTintBrush" Color="#33262626" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#2AFFFFFF" />
             <SolidColorBrush x:Key="LauncherTextBrush" Color="#F2FFFFFF" />
             <SolidColorBrush x:Key="LauncherInputTextBrush" Color="#F2FFFFFF" />
@@ -34,7 +34,7 @@
         </ResourceDictionary>
         <ResourceDictionary x:Key="Default">
             <SolidColorBrush x:Key="LauncherFallbackBrush" Color="#CC202020" />
-            <SolidColorBrush x:Key="LauncherTintBrush" Color="#33000000" />
+            <SolidColorBrush x:Key="LauncherTintBrush" Color="#33262626" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#2AFFFFFF" />
             <SolidColorBrush x:Key="LauncherTextBrush" Color="#F2FFFFFF" />
             <SolidColorBrush x:Key="LauncherInputTextBrush" Color="#F2FFFFFF" />
@@ -73,6 +73,7 @@
     <StaticResource x:Key="ListViewItemCornerRadius" ResourceKey="ResultSelectionCornerRadius" />
     <x:Double x:Key="ResultRowHeight">52</x:Double>
     <x:Double x:Key="ResultIconSize">32</x:Double>
+    <x:Double x:Key="ResultGlyphSize">20</x:Double>
     <x:Double x:Key="ResultTitleSize">16</x:Double>
     <x:Double x:Key="ResultSubtitleSize">12</x:Double>
     <x:Double x:Key="CategoryChipHeight">28</x:Double>

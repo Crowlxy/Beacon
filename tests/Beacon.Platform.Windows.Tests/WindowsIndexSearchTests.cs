@@ -12,8 +12,9 @@ public sealed class WindowsIndexSearchTests
         var sql = WindowsIndexSearch.BuildQuery("日本語 O'Brien");
         Assert.Multiple(() =>
         {
-            Assert.That(sql, Does.Contain("LIKE '日本語 O''Brien%'") );
-            Assert.That(sql, Does.Contain("CONTAINS(System.FileName,'\"日本語 O''Brien*\"')"));
+            Assert.That(sql, Does.Contain("LIKE '日本語%'") );
+            Assert.That(sql, Does.Contain("CONTAINS(System.FileName,'\"O''Brien*\"')"));
+            Assert.That(sql, Does.Contain(") AND ("));
             Assert.That(sql, Does.Contain("scope='file:'"));
         });
     }

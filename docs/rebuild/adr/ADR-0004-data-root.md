@@ -11,7 +11,7 @@
    - `portable.flag` なし・`<BeaconRoot>\Data` も存在しない → 非ポータブルモードとして `%LOCALAPPDATA%\Beacon\Data` を使用（**将来の非Portable/MSIX配布用に予約**。Roamingにしない: 検索キャッシュ・履歴は同期対象にすべきでない）
    - **`portable.flag` が消失したが `<BeaconRoot>\Data` が残っている → 無言で `%LOCALAPPDATA%` へ切り替えない。** 起動時に状態不整合を提示し、「flagを復元してポータブル継続」か「非ポータブルへ移行」をユーザーに選ばせる
 3. DataRootの解決は**Beacon.exe起動時に一度だけ**行い、正規化した絶対パスを PluginHost / Updater へ**起動引数（または環境変数）で渡す**。各プロセスが独自判断で保存先を決めない。
-4. 旧WPF版のデータ（`%APPDATA%\Beacon` / 旧ポータブル `UserData`）とは**ファイルを共有しない**。取り込みは移行ウィザード（Phase R9、MIGRATION.md）が唯一の経路。並行運用中の相互破壊を防ぐ。
+4. 旧WPF版のデータ（`%APPDATA%\Beacon` / 旧ポータブル `UserData`）とは**ファイルを共有しない**。取り込みは移行ウィザード（Phase R7、MIGRATION.md）が唯一の経路。並行運用中の相互破壊を防ぐ。
 5. 書き込み規則: テンポラリファイル経由のatomic rename / 設定更新前バックアップ / シンボリックリンク解決後にDataRoot配下であることを検証（パストラバーサル防止）/ 秘密情報をログへ出さない。
 6. `%TEMP%` の利用は可（永続データを残さない）。レジストリ/AppDataへの永続書き込みは、ユーザーが明示的に有効化したWindows統合（DISTRIBUTION.md §5）に限定し、場所と削除方法を文書化する。
 

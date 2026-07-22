@@ -1,5 +1,7 @@
 # TEST_MATRIX — テスト戦略
 
+> 検証分担（2026-07-22ユーザー決定）: Codexは自動テスト・自動スモーク・起動確認までを行い、操作・UI・見た目・体感の確認はユーザーが目視で行う。詳細は `AGENTS.md`「完了条件」。以下の手動系はユーザー実施項目（Codexは一覧化して引き渡す）。
+
 ## 1. 自動テスト（フェーズごとに追加、CIで常時実行）
 
 | 領域 | 内容 | Phase |
@@ -8,7 +10,7 @@
 | Query | キャンセル・逐次(incremental)結果・セッション無効化 | R2 |
 | Ranking | スコア表・Web降格・履歴ブースト | R6 |
 | History | 保存・読込・破損時復旧 | R6 |
-| Settings migration | 旧Settings.json→新スキーマ（正常・欠損・破損） | R9 |
+| Settings migration | 旧Settings.json→新スキーマ（正常・欠損・破損） | R7 |
 | PluginHost protocol | RPC契約・タイムアウト・クラッシュ復旧・不正ExecutionToken拒否 | R7 |
 | Platform | Everythingあり/なし・Shellパス・IconDescriptor | R3 |
 | DataRoot | portable.flag解決規則（あり/なし/flag消失+Data残存/書き込み不可） | R1〜 |
