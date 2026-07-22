@@ -41,7 +41,6 @@ public sealed class QueryOrchestrator(
         lock (_gate)
         {
             _sessionCancellation?.Cancel();
-            _sessionCancellation?.Dispose();
             _sessionCancellation = cancellation;
             _currentSession = session;
             _executionTokens = [];
@@ -59,7 +58,7 @@ public sealed class QueryOrchestrator(
                 () => ProduceWithinDeadlineAsync(provider, request, channel.Writer, cancellation.Token),
                 CancellationToken.None))
             .ToArray();
-        _ = CompleteAsync(producers, channel.Writer);
+        _ = CompleteAsync(producers, channel.Writer, cancellation);
 
         while (await channel.Reader.WaitToReadAsync(CancellationToken.None))
         {
@@ -127,7 +126,6 @@ public sealed class QueryOrchestrator(
         lock (_gate)
         {
             _sessionCancellation?.Cancel();
-            _sessionCancellation?.Dispose();
             _sessionCancellation = null;
         }
     }
@@ -180,7 +178,10 @@ public sealed class QueryOrchestrator(
         _ = producer.ContinueWith(static task => _ = task.Exception, TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    private static async Task CompleteAsync(Task[] producers, ChannelWriter<SearchResultDto> writer)
+    private async Task CompleteAsync(
+        Task[] producers,
+        ChannelWriter<SearchResultDto> writer,
+        CancellationTokenSource cancellation)
     {
         try
         {
@@ -190,6 +191,14 @@ public sealed class QueryOrchestrator(
         catch (Exception exception)
         {
             writer.TryComplete(exception);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(_sessionCancellation, cancellation)) _sessionCancellation = null;
+            }
+            cancellation.Dispose();
         }
     }
 }

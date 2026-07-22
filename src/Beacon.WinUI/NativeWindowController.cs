@@ -10,6 +10,7 @@ internal sealed class NativeWindowController : IDisposable
     private const uint HotkeyMessage = 0x0312;
     private const uint DwmCompositionChangedMessage = 0x031E;
     private const uint DisplayChangeMessage = 0x007E;
+    private const uint EraseBackgroundMessage = 0x0014;
     private const uint DpiChangedMessage = 0x02E0;
     private const uint PowerBroadcastMessage = 0x0218;
     private const uint ClipboardUpdateMessage = 0x031D;
@@ -122,6 +123,11 @@ internal sealed class NativeWindowController : IDisposable
 
     private IntPtr WindowProcedure(IntPtr windowHandle, uint message, IntPtr wParam, IntPtr lParam)
     {
+        if (message == EraseBackgroundMessage)
+        {
+            return new IntPtr(1);
+        }
+
         if (message == DwmCompositionChangedMessage && !NativeMethods.ApplyWindowFrameStyle(windowHandle))
         {
             R1Storage.WriteLog("ERROR DWM rounded corners or border suppression failed after composition changed");

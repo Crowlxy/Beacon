@@ -25,8 +25,8 @@ public sealed partial class MainWindow
     private int _pendingVisibleCount;
     private SearchResultDto[] _pendingResults = [];
     private string _pendingResultsQuery = string.Empty;
-    private bool _resultsUpdateScheduled;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _resultsResizeTimer;
+    private bool _resultsUpdateScheduled;
 
     private static double Token(string key) => (double)Application.Current.Resources[key];
     private static int Pixels(double dip, uint dpi) => (int)Math.Round(dip * dpi / 96d);
@@ -234,7 +234,11 @@ public sealed partial class MainWindow
             changed = true;
         }
         while (_results.Count > visible.Length) { _results.RemoveAt(_results.Count - 1); changed = true; }
-        if (changed) ResultsList.SelectedIndex = _results.Count == 0 ? -1 : 0;
+        if (changed)
+        {
+            ResultsList.SelectedIndex = _results.Count == 0 ? -1 : 0;
+            if (_results.Count > 0) ResultsList.ScrollIntoView(_results[0]);
+        }
     }
     private async Task ResolveIconAsync(ResultRow row)
     {
@@ -337,8 +341,8 @@ public sealed partial class MainWindow
     {
         var start = _appWindow.Size.Height;
         if (start == target) return;
-        ResizeWindow(width, target);
         ApplyWindowRegion(width, target, NativeMethods.GetDpiForWindow(_windowHandle));
+        ResizeWindow(width, target);
         R1Storage.WriteLog($"PERF Resize direction={(target > start ? "expand" : "collapse")} AppWindowResizeCalls=1 SetWindowRgnCalls=1 Frames=0 DroppedFrames=0 MaxFrameMs=0.0");
     }
 
