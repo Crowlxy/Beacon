@@ -1,13 +1,25 @@
 <Window
     x:Class="Beacon.WinUI.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Beacon.WinUI">
     <Border
         x:Name="Panel"
         Background="{ThemeResource LauncherTintBrush}"
         BorderBrush="{ThemeResource LauncherBorderBrush}"
         BorderThickness="{StaticResource PanelBorderThickness}"
         CornerRadius="{StaticResource SearchBarCornerRadius}">
+        <Border.Resources>
+            <!-- ランチャー内のみTextBoxのchromeを消す（設定画面には標準の入力欄chromeを残す） -->
+            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+            <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent" />
+        </Border.Resources>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="{StaticResource SearchBarGridHeight}" />
@@ -104,7 +116,7 @@
                                 </Grid>
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultTitleSize}" Foreground="{ThemeResource LauncherResultTitleBrush}" Text="{Binding Result.Title}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultTitleSize}" Foreground="{ThemeResource LauncherResultTitleBrush}" local:HighlightedText.Text="{Binding Result.Title}" local:HighlightedText.Query="{Binding MatchQuery}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultSubtitleSize}" Margin="{StaticResource ResultSubtitleMargin}" Foreground="{ThemeResource LauncherSecondaryTextBrush}" Text="{Binding Result.Subtitle}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <Border Grid.Column="2" Background="{StaticResource QuickKeyBrush}" CornerRadius="{StaticResource CategoryChipCornerRadius}" Padding="{StaticResource QuickKeyPadding}" Margin="{StaticResource QuickKeyMargin}" VerticalAlignment="Center" Visibility="{Binding QuickKeyVisibility}">

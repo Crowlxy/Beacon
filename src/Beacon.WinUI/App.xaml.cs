@@ -30,10 +30,12 @@ public partial class App : Application, IDisposable
                 AppContext.BaseDirectory,
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
             R1Storage.Initialize(resolution.Path);
+            RunLegacyMigration(resolution.Path);
             Beacon.Platform.Windows.StartupRegistration.EnsureCurrentPath(Environment.ProcessPath!, R1Storage.WriteLog);
             _window = new MainWindow(resolution.Path);
             Program.Instance!.StartListening(_window.ShowLauncher);
             R1Storage.WriteLog("INFO Single-instance activation pipe listening");
+            if (Environment.GetEnvironmentVariable("BEACON_SMOKE_SETTINGS") == "1") _window.ShowSettings();
             R1Storage.WriteLog($"PERF StartupToResidentMs={Stopwatch.GetElapsedTime(Program.StartedTimestamp).TotalMilliseconds:F1}");
 
         }
@@ -46,6 +48,29 @@ public partial class App : Application, IDisposable
                 NativeMethods.MessageBoxIconError);
             Exit();
         }
+    }
+
+    private static void RunLegacyMigration(string dataRoot)
+    {
+        if (Environment.GetEnvironmentVariable("BEACON_SKIP_LEGACY_MIGRATION") == "1") return;
+        if (LegacyImporter.WasAttempted(dataRoot)) return;
+        var candidate = LegacyImporter.Detect(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            AppContext.BaseDirectory);
+        if (candidate is null) return;
+        var confirmed = NativeMethods.MessageBoxW(
+            IntPtr.Zero,
+            $"旧Beaconデータを検出しました。\n移行元: {candidate.SourceRoot}\n移行先: {dataRoot}\n\nバックアップして移行しますか？",
+            "Beacon データ移行",
+            NativeMethods.MessageBoxYesNoWarning) == NativeMethods.MessageBoxResultYes;
+        LegacyMigrationResult result;
+        if (confirmed) result = LegacyImporter.Import(candidate, dataRoot);
+        else
+        {
+            LegacyImporter.RecordDeclined(candidate, dataRoot);
+            result = new(false, "移行しませんでした。");
+        }
+        _ = NativeMethods.MessageBoxW(IntPtr.Zero, result.Message, "Beacon データ移行", result.Success ? 0u : NativeMethods.MessageBoxIconError);
     }
 
     public void Dispose()

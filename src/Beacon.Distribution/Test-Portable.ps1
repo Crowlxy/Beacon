@@ -6,6 +6,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$env:BEACON_SKIP_LEGACY_MIGRATION = '1'
+# 起動直後に設定画面を1回生成させる（設定画面のXAML破損をERRORマーカー検査で検出する）
+$env:BEACON_SMOKE_SETTINGS = '1'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if (-not $ZipPath) {
     $ZipPath = Join-Path $repositoryRoot 'artifacts\Beacon-Portable-x64.zip'
@@ -107,9 +110,17 @@ function Test-Beacon([string]$Root, [string]$Phase) {
             Start-Sleep -Milliseconds 200
         }
 
+        $deadline = [DateTime]::UtcNow.AddSeconds(15)
+        while ([DateTime]::UtcNow -lt $deadline) {
+            $content = Read-BeaconLog
+            if ($content -match 'Settings window opened|Settings open failed') { break }
+            Start-Sleep -Milliseconds 200
+        }
+
         $content = Read-BeaconLog
         if ($content -match 'ERROR|Exception') { throw "Error marker found in $logDirectory." }
         if ($content -notmatch 'Hotkey or activation pipe') { throw 'Window activation was not observed.' }
+        if ($content -notmatch 'Settings window opened') { throw 'Settings window was not observed.' }
         Write-Stage "${Phase}: all log markers observed"
         return $process
     }

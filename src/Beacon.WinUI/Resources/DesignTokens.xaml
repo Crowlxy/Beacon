@@ -4,6 +4,7 @@
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="LauncherFallbackBrush" Color="#CCF7F7F7" />
+            <SolidColorBrush x:Key="LauncherErrorBrush" Color="#C42B1C" />
             <SolidColorBrush x:Key="LauncherTintBrush" Color="#40FFFFFF" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#1A000000" />
             <SolidColorBrush x:Key="LauncherTextBrush" Color="#1D1D1F" />
@@ -19,6 +20,7 @@
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="LauncherFallbackBrush" Color="#CC202020" />
+            <SolidColorBrush x:Key="LauncherErrorBrush" Color="#FF99A4" />
             <SolidColorBrush x:Key="LauncherTintBrush" Color="#33262626" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#2AFFFFFF" />
             <SolidColorBrush x:Key="LauncherTextBrush" Color="#F2FFFFFF" />
@@ -33,6 +35,7 @@
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#30FFFFFF" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="LauncherErrorBrush" Color="#FF99A4" />
             <SolidColorBrush x:Key="LauncherFallbackBrush" Color="#CC202020" />
             <SolidColorBrush x:Key="LauncherTintBrush" Color="#33262626" />
             <SolidColorBrush x:Key="LauncherBorderBrush" Color="#2AFFFFFF" />
@@ -48,14 +51,6 @@
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#30FFFFFF" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
-    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
-    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
-    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
-    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
-    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
-    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
-    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
-    <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent" />
     <FontFamily x:Key="LauncherFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Regular.ttf#Zen Kaku Gothic New</FontFamily>
     <FontFamily x:Key="LauncherMediumFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Medium.ttf#Zen Kaku Gothic New</FontFamily>
     <FontFamily x:Key="LauncherBoldFontFamily">ms-appx:///Assets/Fonts/ZenKakuGothicNew-Bold.ttf#Zen Kaku Gothic New</FontFamily>
@@ -75,6 +70,7 @@
     <x:Double x:Key="ResultIconSize">32</x:Double>
     <x:Double x:Key="ResultGlyphSize">20</x:Double>
     <x:Double x:Key="ResultTitleSize">16</x:Double>
+    <x:Int32 x:Key="ResultMatchFontWeight">600</x:Int32>
     <x:Double x:Key="ResultSubtitleSize">12</x:Double>
     <x:Double x:Key="CategoryChipHeight">28</x:Double>
     <x:Double x:Key="CategoryChipFontSize">12</x:Double>
@@ -106,4 +102,72 @@
     <SolidColorBrush x:Key="CategoryChipBrush" Color="#18007AFF" />
     <SolidColorBrush x:Key="QuickKeyBrush" Color="#14000000" />
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent" />
+    <x:Double x:Key="SettingsWindowWidth">720</x:Double>
+    <x:Double x:Key="SettingsWindowHeight">760</x:Double>
+    <x:Double x:Key="SettingsTitleSize">28</x:Double>
+    <x:Double x:Key="SettingsSectionTitleSize">18</x:Double>
+    <x:Double x:Key="SettingsSectionSpacing">28</x:Double>
+    <x:Double x:Key="SettingsItemSpacing">8</x:Double>
+    <Thickness x:Key="SettingsPagePadding">32,24,32,32</Thickness>
+    <x:Double x:Key="SettingsNavPaneWidth">168</x:Double>
+    <x:Double x:Key="SettingsContentMaxWidth">640</x:Double>
+    <x:Double x:Key="SettingsLabelSize">14</x:Double>
+    <x:Double x:Key="SettingsDescriptionSize">12</x:Double>
+    <x:Double x:Key="SettingsRowIconSize">18</x:Double>
+    <x:Double x:Key="SettingsCardSpacing">4</x:Double>
+    <x:Double x:Key="SettingsCardMinHeight">56</x:Double>
+    <x:Double x:Key="SettingsHotkeyBoxWidth">190</x:Double>
+    <x:Double x:Key="SettingsQuickKeyBoxWidth">110</x:Double>
+    <x:Double x:Key="SettingsAboutIconSize">64</x:Double>
+    <CornerRadius x:Key="SettingsCardCornerRadius">8</CornerRadius>
+    <Thickness x:Key="SettingsCardPadding">16,10</Thickness>
+    <Thickness x:Key="SettingsCardIconMargin">0,0,14,0</Thickness>
+    <Thickness x:Key="SettingsTitleMargin">0,0,0,12</Thickness>
+    <Thickness x:Key="SettingsGroupHeaderMargin">4,16,0,4</Thickness>
+    <Thickness x:Key="SettingsErrorMargin">4,4,0,0</Thickness>
+
+    <Style x:Key="SettingsCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="{StaticResource PanelBorderThickness}" />
+        <Setter Property="CornerRadius" Value="{StaticResource SettingsCardCornerRadius}" />
+        <Setter Property="Padding" Value="{StaticResource SettingsCardPadding}" />
+        <Setter Property="MinHeight" Value="{StaticResource SettingsCardMinHeight}" />
+    </Style>
+    <Style x:Key="SettingsPageTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource LauncherBoldFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingsTitleSize}" />
+    </Style>
+    <Style x:Key="SettingsLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource LauncherMediumFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingsLabelSize}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="SettingsDescriptionStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource LauncherFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingsDescriptionSize}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+    <Style x:Key="SettingsGroupHeaderStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource LauncherMediumFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingsLabelSize}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Margin" Value="{StaticResource SettingsGroupHeaderMargin}" />
+    </Style>
+    <Style x:Key="SettingsErrorTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource LauncherFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource SettingsDescriptionSize}" />
+        <Setter Property="Foreground" Value="{ThemeResource LauncherErrorBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="{StaticResource SettingsErrorMargin}" />
+    </Style>
+    <Style x:Key="SettingsRowIconStyle" TargetType="FontIcon">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+        <Setter Property="FontSize" Value="{StaticResource SettingsRowIconSize}" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Margin" Value="{StaticResource SettingsCardIconMargin}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
 </ResourceDictionary>

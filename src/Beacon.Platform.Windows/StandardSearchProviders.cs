@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Xml.Linq;
 using Beacon.Contracts;
+using Beacon.Core;
 
 namespace Beacon.Platform.Windows;
 
@@ -23,7 +24,7 @@ public sealed class WindowsSettingsProvider : ISearchProvider
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!setting.Command.StartsWith("ms-settings:", StringComparison.OrdinalIgnoreCase) ||
-                !setting.Terms.Any(x => x.Contains(query, StringComparison.CurrentCultureIgnoreCase))) continue;
+                !setting.Terms.Any(term => FuzzyMatcher.Match(query, term).Success)) continue;
             yield return new SearchResultDto
             {
                 Id = $"setting:{setting.Command}", ProviderId = Id, Title = setting.Title,
@@ -70,7 +71,7 @@ public sealed class BrowserBookmarkProvider : ISearchProvider
         foreach (var bookmark in await _bookmarks.Value.WaitAsync(cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!bookmark.Title.Contains(request.RawQuery, StringComparison.CurrentCultureIgnoreCase) &&
+            if (!FuzzyMatcher.Match(request.RawQuery, bookmark.Title).Success &&
                 !bookmark.Url.Contains(request.RawQuery, StringComparison.OrdinalIgnoreCase)) continue;
             yield return new SearchResultDto
             {
@@ -116,7 +117,7 @@ public sealed class ProcessKillerSearchProvider : ISearchProvider
             using (process)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!process.ProcessName.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!FuzzyMatcher.Match(query, process.ProcessName).Success) continue;
                 var subtitle = $"PID {process.Id}";
                 try { _ = process.Handle; }
                 catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -148,7 +149,7 @@ public sealed class SystemActionSearchProvider : ISearchProvider
     public string ProviderId => Id;
 
     public static IReadOnlyList<SearchResultDto> Browse(string query = "") => Actions
-        .Where(action => string.IsNullOrWhiteSpace(query) || action.Terms.Any(x => x.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
+        .Where(action => string.IsNullOrWhiteSpace(query) || action.Terms.Any(term => FuzzyMatcher.Match(query, term).Success))
         .Select(CreateResult)
         .ToArray();
 

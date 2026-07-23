@@ -18,11 +18,7 @@ public static class RankingEngine
         RankingContext context)
     {
         var value = result.Score;
-        var title = result.Title.Trim();
-        var term = query.Trim();
-        if (string.Equals(title, term, StringComparison.OrdinalIgnoreCase)) value += 600;
-        else if (title.StartsWith(term, StringComparison.OrdinalIgnoreCase)) value += 300;
-        else if (title.Contains(term, StringComparison.OrdinalIgnoreCase)) value += 150;
+        value += FuzzyMatcher.Match(query, result.Title).Score;
 
         if (context.PersonalizationEnabled && usage is not null)
         {

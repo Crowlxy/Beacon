@@ -1,180 +1,294 @@
 # PROMPTS — Codex実装プロンプト
 
 運用: ユーザーが本リポジトリ（`C:\Users\ha.takaku\Desktop\Project\Beacon`）を作業ディレクトリとしてCodexを**対話モードで**実行し、以下のプロンプト本文を渡す（モデル: gpt-5.6-sol）。ヘッドレスの `codex exec` はこの環境ではサンドボックス制限で失敗するため使わない（LESSONS-archive.md 2026-07-16）。
-**本ファイルには現行フェーズのプロンプトのみ置く。** R3は2026-07-20完了。R4はR4.1〜R4.3を経てR4.3でGate B承認（2026-07-21ユーザー承認。B-1の枠再発はR4.4での修正を待たずユーザー確認によりクローズ）。R4.4は未着手のまま不要化。統合R5（旧R5・R6・R8。旧R7=第三者プラグイン対応は実装対象外）はStage 1〜3実装後、2026-07-22にGate C承認（PLAN.md参照）。同日「検索レイテンシ改善」保守修正をユーザー検証済み（HotkeyToDisplayMs 240→33.7ms。一部受け入れ項目はR6へ引き継ぎ）。R6（性能・応答性＝レンダリング刷新）は2026-07-22にレビュー→承認・完了（下記R6結果注記。1点だけWindowsIndexSearch接続撤回のユーザー判断待ち）。**現行フェーズ = Phase R7（設定・データ移行＝設定画面UI + Legacy importer）**。旧番号R6・R8は歴史的言及、旧「R9 設定・データ移行」が現行R7（PLAN.md 2026-07-22注が正）。
+**本ファイルには現行フェーズのプロンプトのみ置く。** R3は2026-07-20完了。R4はR4.3でGate B承認（2026-07-21）。統合R5（旧R5・R6・R8）は2026-07-22にGate C承認。R6（レンダリング刷新）は2026-07-22承認・完了。R7（設定・データ移行＝設定画面UI + Legacy importer）は `feature/rebuild-r7` で実装済み（SettingsWindow.xaml(.cs) / LegacyMigration.cs）。ただし2026-07-23のユーザー目視レビューで **(a) 検索の一致品質・並び順・ハイライトが旧WPF版（Flow Launcher）に対し明確に劣る（統一マッチャ不在。①アプリのみ簡易ファジー②他は`String.Contains`③RankingEngineはタイトルexact/prefix/containsのみで①とスケール不一致）、(b) R7の設定画面UIが仮組み（テキスト手入力の羅列）で製品水準に達しない** の2点が確定した。これを是正するのが本フェーズ。**現行フェーズ = Phase R8（検索エンジン統一 + 設定画面リデザイン）**。R8はR7のLegacy importer（移行ロジック）を退行させず、R7の設定画面UIスタブを製品水準へ置き換える。
+
+**2026-07-23追記: R8実装後のユーザー確認で (a) 設定画面が開かない（Data\Logs に `XamlParseException: Cannot find a Resource with the Name/Key TabViewButtonBackground`。App.xaml に XamlControlsResources 未マージのため NavigationView が生成不能）、(b) Stage 2-2 の設定行スタイル（アイコン+ラベル+説明+右側コントロールの行カード）が未実装で素のコントロール羅列のまま、が確定。R8完了条件のうち「トレイ『設定』で新設定画面を開く」「Data\Logs に ERROR が無い」は未達。是正は下記 Phase R8.1。**
 
 
-## Phase R7: 設定・データ移行（設定画面UI + Legacy importer）
+## Phase R8: 検索エンジン統一 + 設定画面リデザイン
 
-前提: R6（レンダリング刷新）が**mainにマージ済み**であることをユーザーへ確認してから着手する。実装ブランチは `feature/rebuild-r7-settings-migration`。本フェーズは Gate C合格の機能・UI・デザインへの**追加**であり、R4〜R6で確定した検索・ランキング・IME・アクリル/枠/角丸・レンダリング挙動を退行させない。新規NuGet依存の追加は原則禁止（必要なら DEPENDENCY_MAP.md B1 手続きを踏み、追加前に報告して指示を仰ぐ）。**Stage 1（設定画面UI）を先に完了・報告してから Stage 2（移行）へ進む。**
+前提: R7が **mainにマージ済み**（または `feature/rebuild-r7` の内容がツリーに存在）であることをユーザーへ確認してから着手する。実装ブランチは `feature/rebuild-r8-search-settings`。本フェーズは Gate C/R6/R7 で確定した機能・UI・デザインへの**改善**であり、状態遷移・IME・アクリル/枠/角丸・レンダリング・Legacy移行・クリップボード監視・実行契約（ContractVersion/ExecutionToken）を退行させない。新規NuGet依存の追加は原則禁止（必要なら DEPENDENCY_MAP.md B1 手続きを踏み、追加前に報告して指示を仰ぐ）。**Stage 1（検索エンジン統一）を先に完了・報告してから Stage 2（設定画面リデザイン）へ進む。**
 
 ```
-あなたはBeacon（WinUI 3 Portable-firstランチャー・独立リポジトリ）のPhase R7を担当する。
-目的は「これまでトレイメニューとDataRoot配下の設定ファイルだけで管理していた設定を、
-ユーザーが操作できる設定画面UIとして提供し、旧WPF版（Beacon-old）からのデータ移行を
-一度きり・明示的・非破壊で行えるようにする」こと。検索・ランキング・状態遷移・IME・
-レンダリングなど既存挙動の変更はしない（設定値の反映口を増やすだけ）。
-必ず Stage 1（設定画面UI）→ Stage 2（Legacy移行）の順で実装し、各Stage完了時に
+あなたはBeacon（WinUI 3 Portable-firstランチャー・独立リポジトリ）のPhase R8を担当する。
+目的は2つ。
+(1) 現在バラバラな検索の一致判定（①アプリだけ手書き簡易ファジー / ②設定・ブックマーク・
+    プロセス等は String.Contains / ③RankingEngine はタイトルの exact/prefix/contains のみで
+    ①とスコアスケールが噛み合っていない）を、Beacon.Core の「1個のファジーマッチャ」に統一し、
+    さらに一致文字を結果一覧で太字ハイライトする。これは旧WPF版（Flow Launcher）が
+    StringMatcher.FuzzyMatch 1個で全プラグインを支えていたのと同じ思想へ寄せる作業。
+(2) R7で仮組みのまま残っている設定画面UI（テキスト手入力の羅列）を、キーボード操作可能で
+    ランチャーと一貫したトーンの製品水準の設定画面へ作り直す。
+必ず Stage 1（検索統一）→ Stage 2（設定画面）の順で実装し、各Stage完了時に
 ビルド・テストをグリーンへ戻して途中報告を出すこと（最後にまとめて報告しない）。
 
 ## リポジトリ配置
 - 作業対象: C:\Users\ha.takaku\Desktop\Project\Beacon
-- Beacon-old（移行元・参照専用・変更禁止）: C:\Users\ha.takaku\Desktop\Project\Beacon-old
+- Beacon-old（移植元・参照専用・変更禁止）: C:\Users\ha.takaku\Desktop\Project\Beacon-old
 
 ## 読むべき文書（この順で。読み飛ばし禁止）
 1. AGENTS.md（特に「環境の既知制約」の固定ルール）
 2. docs/rebuild/LESSONS.md（未解決の失敗のみ）
-3. docs/rebuild/SPEC.md の §4末（Everythingは「設定画面で一度だけ案内」）・§6（Windows統合）・
-   §7.4（Actions/Quick Keys。「編集UIはR7」）・§7.5（クリップボード履歴。「除外アプリ指定UIはR7」）・
-   §7.6（個人化。「全リセット・OFFの設定画面はR7」）。
-   ※SPEC本文に「§6.6」という見出しは実在しない。設定画面の要件は上記の各節に分散しているので
-   それらを正とする（他文書に残る「§6.6」表記はこの分散要件を指す歴史的言及）
-4. docs/rebuild/MIGRATION.md（移行元→移行先の対応表・移行フロー・並行運用の安全規則）。
-   ※本文中の「Phase R9」は現行フェーズ番号R7の旧称（PLAN.md 2026-07-22注が正）。
-   R7開始時にこの旧番号表記を修正し、§14の「Settingsプロパティ走査でのマッピング確定」を実施する
-5. docs/rebuild/adr/ADR-0004（DataRoot解決規則。移行先は必ず解決済みDataRoot配下）
-6. docs/rebuild/PLAN.md 「Phase R7」（作業項目と完了条件。本プロンプトの正）
-7. 現ツリーの設定まわり:
-   - src/Beacon.WinUI/DataRootResolver.cs（R1Storage。設定ファイル
-     <DataRoot>\Settings\r1-settings.json の既定生成・GetBoolean/SetBoolean・ログローテーション）
-   - src/Beacon.WinUI/MainWindow.xaml.cs（トレイ配線・ClipboardEnabled/PersonalizationEnabled
-     の読み書き・TogglePersonalization/ResetPersonalization）
-   - src/Beacon.WinUI/NativeWindowController.cs（RegisterHotKey・トレイメニュー項目・
-     ホットキーが現状ハードコード＝VirtualKeySpace 0x20 + Alt+Shift+Space で登録されている点）
+3. docs/rebuild/SPEC.md の §3.3（DesignTokens初期値・「選択表現＝背景ピルのみ・タイトル色は変えない」）・
+   §4（検索とランキングのスコア表。**この承認済みスコア表の意味は勝手に変えない**）・
+   §7（Beacon固有UX・状態遷移）
+4. docs/rebuild/COMPATIBILITY.md §2（標準プラグインの移植分類。検索対象プロバイダーの範囲）
+5. docs/rebuild/AUDIT.md A12（StringMatcher.cs / DiacriticsNormalizer.cs / PinyinAlphabet.cs を
+   Beacon.Core へ「アダプト」する計画だった行。本フェーズでこの宿題を果たす。
+   ただし Pinyin は SPEC の対象外方針に従い**移植しない**）
+6. docs/rebuild/adr/ADR-0001（UI境界。Contracts/CoreにUI参照禁止・MIT表記維持）
 
-## 現状把握（ここを踏まえて設計する。憶測で二重化しない）
-- 設定は <DataRoot>\Settings\r1-settings.json に集約されている。既存キー:
-  ContractVersion / LogRetentionCount / ClipboardEnabled / ClipboardExcludedApplications /
-  PersonalizationEnabled / QuickKeys{rf,cp,rn,term}。**この単一ファイルを設定の正とし、
-  新しい保存先やスキーマを勝手に作らない**（ファイル名 r1-settings.json は歴史的経緯だが
-  改名はデータ移行を伴うため本フェーズでは行わず、必要性があれば報告のみ）
-- 読み書きは R1Storage の GetBoolean/SetBoolean しかない（真偽値専用）。ホットキー文字列・
-  QuickKeys など非真偽値の型付きアクセサが必要になるので、R1Storage を最小限拡張して
-  文字列/オブジェクトの安全な読み書き（一時ファイル+置換の既存パターン踏襲）を足す
-- ホットキーは現状コード定数（Alt+Shift+Space）で、設定ファイルから読んでいない。
-  設定画面で変更できるようにするには「設定ファイルから読む→RegisterHotKey→失敗時は
-  旧ホットキーへロールバック」の経路が必要
-- 設定のロジック（バリデーション・移行・スキーマ）は Beacon.Core、Windows依存
-  （HKCU Run・DPAPI・RegisterHotKey）は Beacon.Platform.Windows、描画のみ Beacon.WinUI に置く
+## 移植元（Beacon-old・参照のみ・コピペ禁止＝UI/Ioc/Settings依存を外して書き直す）
+- Flow.Launcher.Infrastructure/StringMatcher.cs
+  （FuzzyMatch本体: Acronym Match + サブストリング/部分列マッチ + CalculateSearchScore +
+    一致インデックス List<int> の算出。Ioc.Default / Settings / IAlphabet(Pinyin) 依存は外す）
+- Flow.Launcher.Infrastructure/DiacriticsNormalizer.cs（アクセント正規化。UI非依存なのでほぼ流用可）
+- Flow.Launcher.Plugin/SharedModels/MatchResult.cs
+  （Success / Score / MatchData(=一致インデックス) / SearchPrecisionScore の構造を参考にする）
+移植コードには Flow Launcher / Wox の MIT 由来表記をファイル冒頭コメントで維持し、
+DEPENDENCY_MAP.md / attribution.md に移植元を追記する（ADR-0001 §3）。
 
-## Stage 1: 設定画面UI
+## 現状把握（実コード。憶測で二重化しない）
+- Beacon.Contracts/SearchContracts.cs: SearchResultDto は Contracts にあり、ContractVersion=2。
+  Contracts はプロセス境界（PluginHost RPC）を越える型。**UI都合の変更でContractsを気軽に膨らませない**
+- Beacon.Core/RankingEngine.cs: 現在 result.Title に対し exact+600 / StartsWith+300 / Contains+150、
+  加えて使用履歴（24h+120 / 7日+60 / 選択回数最大+180 / アクティブプロセス・フォルダ 各+80）、
+  WebSearch -250。QueryOrchestrator.SearchAsync が各結果に対しこの Score で上書きする
+- Beacon.Platform.Windows/AppSearchProvider.cs: internal static MatchScore(query,candidate) が
+  唯一の手書きファジー（完全一致100/部分一致90/頭字語70/部分列 閾値50）。SearchAsync はこれで Score>0 を絞る
+- String.Contains だけで一致判定している箇所（＝②。ファジーゼロ・ハイライト不可）:
+  - Beacon.Platform.Windows/StandardSearchProviders.cs の
+    WindowsSettingsProvider（setting.Terms を Contains）/ BrowserBookmarkProvider（Title・Url を Contains）/
+    ProcessKillerSearchProvider（"kill " の後を ProcessName に Contains）/
+    SystemActionSearchProvider（Terms を Contains）
+  - Beacon.Core/BuiltInSearchProviders.cs の WebSearchProvider は全クエリを拾う設計（一致判定なし＝維持）、
+    CalculatorSearchProvider / UrlSearchProvider は式・URL判定であり文字列一致ではない（対象外＝維持）
+  - ShellSearchProvider は ">" プレフィクスのコマンド実行（一致判定ではない＝維持）
+- Beacon.WinUI/MainWindow.xaml: 結果行の ItemTemplate で Result.Title / Result.Subtitle を
+  TextBlock.Text に直接バインドしている（＝ハイライトRunが無い）。ResultRow は MainWindow.R4.cs
+- Beacon.WinUI/MainWindow.R4.cs: SearchAsync は _orchestrator.SearchAsync の結果を Score 降順で並べ替えて表示。
+  クイックキー適用時は TryQuickKey で「実際の検索文字列(searchText)」と「表示クエリ」を分けている
+  （ハイライト対象は searchText＝実際に検索している語であること）
+- Beacon.WinUI/SettingsWindow.xaml(.cs): R7の設定画面。ScrollViewer+StackPanel に
+  ホットキーTextBox / QuickKeysを改行区切りテキスト手入力 / 除外アプリも改行区切りテキスト、という仮組み。
+  コンストラクタで受け取るコールバック（changeHotkey / clipboardEnabled / toggleClipboard /
+  personalizationEnabled / togglePersonalization / resetPersonalization / clearClipboard /
+  applyClipboardExclusions）と R1Storage キー（GlobalHotkey / QuickKeys / ClipboardExcludedApplications /
+  ClipboardEnabled / PersonalizationEnabled / EverythingNoticeShown）は **配線として正しいので壊さない**。
+  作り直すのは見た目と操作方法であって、設定の保存先・サービス連携ではない
 
-1. 設定ウィンドウ: トレイメニューに「設定」を追加し、独立した AppWindow として設定画面を開く
-   （ランチャー本体ウィンドウとは別。多重に開かない＝既に開いていれば前面化）。
-   閉じてもアプリは常駐し続ける。ランチャーと同じ DesignTokens.xaml のトーン
-   （色・寸法・時間はすべてトークン経由。直値禁止）。標準的な設定画面レイアウト
-   （左ナビ or セクション積み）で親しみやすさ優先。キーボードのみで全項目を操作できること
-2. グローバルホットキー変更: 現在のホットキーを表示し、キャプチャUI（修飾キー+主キーを押して設定）で
-   変更できる。押下の組み合わせを検証し、登録失敗（他アプリが使用中など）は
-   その場でエラー表示して**元のホットキーへロールバック**（無効な状態で確定させない）。
-   確定値は r1-settings.json に保存し、次回起動時もそれで登録する。
-   ※既定値の扱い: 現状の開発中識別子 Beacon.Next では旧版との衝突回避のため Alt+Shift+Space を
-   既定にしている。PLAN/SPECの「正式既定 Alt+Space」は Gate D の本番識別子切替時の話。
-   本フェーズでは**既定を勝手に Alt+Space へ変えず**、設定ファイルの現既定（Alt+Shift+Space）を
-   初期値として保持し、変更手段のみ提供する。既定値変更の要否は報告して判断を仰ぐ
-3. Quick Key編集: 既定4種（rf=保存場所を表示 / cp=パスをコピー / rn=名前変更 / term=ターミナル）の
-   キー割り当てを編集・追加・削除できる。割り当て可能なアクションは内蔵アクションv1（SPEC §7.4）から選ぶ。
-   重複キー・空キーを検証。保存は r1-settings.json の QuickKeys。既定へ戻すボタンを用意
-4. 個人化・クリップボードのON/OFFと全リセット: これまでトレイのみだった
-   個人化ON/OFF・個人化全リセット・クリップボード履歴ON/OFFを設定画面にも出す
-   （トレイ項目は維持してよい。両者が同じ R1Storage/同じサービスを操作し状態が一致すること）。
-   破壊的操作（個人化の全リセット・クリップボード履歴の全削除）は SPEC §7.4 の確認フロー相当の
-   確認を必須にする
-5. クリップボード除外アプリ指定UI（SPEC §7.5。データ枠 ClipboardExcludedApplications は既存）:
-   除外するアプリ（プロセス名/実行ファイル）を追加・削除できるUIを付け、
-   r1-settings.json の ClipboardExcludedApplications に保存する。監視サービスがこの一覧を
-   尊重して除外することをテストで固定する（OFF時は監視APIを呼ばない既存保証を壊さない）
-6. Everything未起動の一度きり案内（SPEC §4末）: Everythingが未導入/未起動のとき、
-   検索結果にエラーを混ぜず、**一度だけ**案内を出す（案内済みフラグを設定ファイルに保持し
-   再表示しない）。設定画面から再表示/リセットできる導線を用意してよい。
-   案内は「Everythingがあると高速」という情報提供に留め、強制しない
-7. About・Third-party notices: バージョン/ContractVersion表示と、配布物同梱の
-   attribution.md / LICENSE 相当（Flow Launcher・Wox・Everything・Windows App SDK等の表記）を
-   閲覧できる画面。表示内容は実配布物のライセンスファイルと一致させる（存在しない表記を載せない）
+## Stage 1: 検索エンジン統一（①②③を1本化 + ハイライト）
 
-## Stage 2: Legacy importer（MIGRATION.md が正）
+1. Beacon.Core に統一ファジーマッチャを新規追加（UI参照禁止・純ロジック）:
+   - DiacriticsNormalizer を Beacon.Core へ移植（アクセント正規化。既存のCore方針どおりUI非依存）
+   - FuzzyMatcher（クラス名は任意）: 入力(query, candidate)に対し
+     `record FuzzyMatchResult(bool Success, int Score, IReadOnlyList<int> MatchedIndices)` を返す。
+     StringMatcher.FuzzyMatch の Acronym Match（先頭/空白後/大文字/数字を頭字語とみなす）+
+     サブストリング/部分列マッチ + CalculateSearchScore + 一致インデックス算出を移植する。
+     Pinyin/IAlphabet は移植しない。アクセント無視は DiacriticsNormalizer で常時有効でよい（設定不要）。
+     しきい値は SearchPrecisionScore 相当（Regular=50 を既定）を定数で持ち、Success はしきい値到達で判定
+   - **これが唯一の一致判定・一致ハイライトの源**。以降すべてのテキスト一致はここを通す
+2. ①の置換: AppSearchProvider の手書き MatchScore を削除し、FuzzyMatcher へ差し替える。
+   SearchAsync のメンバー判定は FuzzyMatchResult.Success で行う（スコア確定はRankingEngineに委ねる。下記4）
+3. ②の置換: StandardSearchProviders.cs の
+   WindowsSettingsProvider / BrowserBookmarkProvider / ProcessKillerSearchProvider /
+   SystemActionSearchProvider の Contains を、FuzzyMatcher.Success による絞り込みへ置換する。
+   - 各プロバイダーが「一致対象にする文字列」を明示（設定=Terms / ブックマーク=Title（Urlは補助でContains可）/
+     プロセス="kill "以降 vs ProcessName / システム操作=Terms）。日本語Termは正規化の影響を受けないので従来どおり通る
+   - WebSearch / Calculator / Url / Shell は現状維持（一致判定の性質が違う。上記「現状把握」参照）
+4. ③の統一（スコアスケールを一本化。SPEC §4の意味は保持）:
+   - RankingEngine を「マッチ品質は FuzzyMatcher に一元化し、その上に SPEC §4 の使用履歴・文脈ボーナスを
+     加算する」構造へ変更する。現在の title exact/prefix/contains の自前判定は削除し、
+     FuzzyMatcher(query, Title).Score を『マッチ品質スコア』として使う
+   - プロバイダー固有のベース値（例: Calculator=500, WebSearch=-250 のカテゴリオフセット）は維持する。
+     つまり最終スコア = プロバイダーのカテゴリオフセット + FuzzyMatcherのマッチ品質 + 使用履歴/文脈ボーナス、
+     の合成として一貫させる。全プロバイダーが同じマッチ品質スケールに乗ることを最優先にする
+   - **注意**: SPEC §4 の数値表（完全一致+600 / 前方+300 / タイトル+150 …）は承認済みの製品方針。
+     マッチ品質の“機構”をFuzzyMatcherへ替えるのは本フェーズの目的だが、§4の相対的な意味
+     （完全一致 > 前方一致 > 部分一致、使用履歴が効く、Webは最下位）が保たれること。
+     もし数値の再マッピングが必要になったら、勝手に確定せず対応表を作って**報告し指示を仰ぐ**
+     （SPEC §4 を改訂する場合は理由をSPECへ追記）。ファイル検索（Everything/WindowsIndex）は候補源は
+     従来どおりだが、並び順の一貫性のため Title に対する FuzzyMatcher スコアで再ランクしてよい
+     （性能懸念があれば計測して報告）
+5. 一致ハイライト（体感品質の要）:
+   - 結果一覧のタイトルで、実際に検索している語（クイックキーを剥がした searchText）に一致した文字を
+     **太字**で表示する。色は変えず太さのみ（SPEC §3.3「タイトル色は変えない」を尊重）。
+     太字の重み・（必要なら）微差の強調色は DesignTokens.xaml のトークンで定義（直値禁止）。
+     TextTrimming（省略記号）は維持する
+   - 実装方針（いずれでもよいが Contracts を膨らませない方を優先）:
+     (推奨) WinUI 層（ResultRow / MainWindow）で、表示時に Core の FuzzyMatcher を Title に対して再実行して
+     一致インデックスを得て、TextBlock の Inlines を Run（通常/太字）で組み立てるヘルパー（例: 添付プロパティや
+     小さな変換ヘルパー）を用意する。ContractsのSearchResultDtoは変更しない。
+     もし再実行がランキング時の一致と食い違う懸念があるなら、SearchResultDto に
+     `IReadOnlyList<int>? TitleMatch` を追加し ContractVersion を 3 へ上げる案を**先に報告**してから採用する
+     （ContractsとRPC双方の整合が要るため、独断で上げない）
+   - サブタイトルのハイライトは任意（やらない場合はやらない理由を一言）
+6. テスト（tests/ に追加。フレームワークは既存に合わせる）:
+   - FuzzyMatcher 単体: "vsc"→"Visual Studio Code" が頭字語一致、部分列一致、大小無視、アクセント無視、
+     しきい値未満は Success=false、一致インデックスが正しい位置を返す、日本語Termがそのまま通る、を固定
+   - RankingEngine: 完全一致 > 前方一致 > 部分一致の順序、使用履歴ボーナス、Web最下位が保たれることを固定
+   - 各プロバイダーが FuzzyMatcher 経由で絞り込むこと（Contains時代に落ちていたタイポ・文字飛ばしが拾えること）を最小限固定
 
-1. Settingsプロパティ走査（MIGRATION.md §14）: Beacon-old の Settings.cs 全プロパティを走査し、
-   新スキーマ（r1-settings.json のキー）への対応表を作成して報告する。
-   移行する値の確定リスト（ホットキー / ColorScheme / 言語 / Everything設定 /
-   カスタムショートカット等）と、移行しない値（テーマ・UI寸法・時計/サウンド。新版は固定デザインで該当機能なし）を明記
-2. 検出→確認→バックアップ→変換→整合性確認→ロールバック→記録（MIGRATION.md §2 のフロー厳守）:
-   - 初回起動時に旧データ（%APPDATA%\Beacon または旧ポータブルの UserData\）を検出したら、
-     **対象と移行先を表示してユーザー確認を求める**（自動移行しない）
-   - 移行前に旧データを <BeaconRoot>\Data\Backup\legacy-<日付>\ へバックアップ
-   - 変換・コピー後に整合性確認（ファイル数・主要キーの読み戻し）
-   - 失敗時は新Data側の書き込みを消して未移行状態へロールバック（旧版はそのまま使える）
-   - <BeaconRoot>\Data\State\migration.json に移行バージョン・日時・結果を記録し再実行を防ぐ
-   - **元データはユーザー確認なしで削除しない**（移行成功後も残す。削除はユーザー明示操作のみ）
-3. プラグイン移行は対象外: 第三者プラグイン対応は実装対象外（2026-07-20ユーザー決定）のため、
-   MIGRATION.md §1 の「ユーザー導入プラグイン」「プラグイン設定」および §4「プラグイン互換API」に
-   関わる移行は**行わない**。この矛盾を MIGRATION.md 側にも注記して整合させる（移行対象から除外と明記）
-4. 並行運用の安全規則（MIGRATION.md §3）を守る: 新旧でファイルを共有しない
-   （旧版は %APPDATA%\Beacon を使い続け、新版は移行時の読み取り以外触らない）。
-   開発中identifier（Beacon.Next / Mutex・パイプ別名）で単一インスタンスが衝突しないこと
+## Stage 2: 設定画面リデザイン（配線は保持・見た目と操作方法を作り直す）
+
+前提: R7の SettingsWindow のコールバック配線・R1Storageキー・サービス連携は保持する
+（保存先・トグルの意味・移行ロジックを変えない）。作り直すのは XAML と操作フローと入力UI。
+
+1. レイアウト: NavigationView 等による左ナビ（またはセクション積み）で、標準的で親しみやすい設定画面にする。
+   セクション例: 一般（ホットキー）/ 検索（Everything案内・必要なら一致しきい値）/ Quick Keys /
+   プライバシー（個人化・クリップボード・除外アプリ）/ About。
+   ランチャーと同じ DesignTokens.xaml のトーン（色・寸法・角丸・間隔はすべてトークン経由。直値禁止）。
+   設定ウィンドウにも Mica/Acrylic 等のバックドロップを適用し本体と統一感を出す（非対応環境はソリッド）。
+   **キーボードのみで全項目を操作できること**（Tab移動・フォーカス可視・Enter/Space操作）
+2. 設定行の見た目: テキストの羅列をやめ、行単位のカード/リスト風（アイコン+ラベル+説明+右側コントロール）にする。
+   CommunityToolkit等の新規NuGetは原則使わず、DesignTokensで軽量な設定行スタイルを自作する
+   （どうしても必要なら DEPENDENCY_MAP.md B1 手続きで先に報告）
+3. ホットキー: 現在の割り当てをわかりやすく表示し、キャプチャUI（修飾キー+主キーを押す）で変更。
+   登録失敗（他アプリ使用中など）はその場でエラー表示して**元のホットキーへロールバック**（R7の
+   TryChangeHotkey 経路を使う）。無効な状態で確定させない
+4. Quick Key編集: 改行区切りテキストをやめ、「キー入力 → アクションをドロップダウンで選択」の行を
+   追加/削除できるリストUIにする。割り当て可能アクションは内蔵アクションv1（BuiltInActions.All）から選ぶ。
+   重複キー・空キーを検証。保存は R1Storage の QuickKeys。既定へ戻すボタンを維持
+5. クリップボード除外アプリ: 改行区切りテキストをやめ、追加/削除できるリストUIにする。
+   保存は ClipboardExcludedApplications。監視サービスがこの一覧を尊重する既存挙動を壊さない
+6. プライバシー: 個人化ON/OFF・個人化全リセット・クリップボード履歴ON/OFF・全削除を配置。
+   破壊的操作（個人化全リセット・クリップボード全削除）は確認を必須にする（R7の確認相当を維持）。
+   トレイメニューの同項目と状態が常に一致すること（同じサービス/同じR1Storageを操作）
+7. Everything案内・About: R7の内容（案内の再表示リセット / バージョン・ContractVersion /
+   Third-party notices・LICENSE 閲覧）を維持しつつ、新レイアウトへ載せ替える。
+   表示するライセンス表記は実配布物のファイルと一致させる（存在しない表記を載せない）
 
 ## 非対象範囲（やらない）
-- 正式識別子切替（Beacon.Next → Beacon）→ Gate D（R10） / MSIX → R11
-- 第三者プラグイン対応・プラグイン移行一式（上記 Stage 2-3）
+- Legacy importer（移行ロジック）の作り直し（R7実装を保持・退行させないだけ）
+- 状態遷移・IME・アクリル/枠/角丸・レンダリング挙動・実行契約そのものの変更
+- Pinyin/ダブルPinyin検索・検索精度のユーザー設定UI（しきい値は内部定数。UI露出は任意）
+- 第三者プラグイン対応・プラグイン移行（実装対象外 2026-07-20）
 - テーマ/UI寸法のユーザー設定・クリップボード画像対応・AI機能・クラウド送信
-- 検索・ランキング・状態遷移・IME・レンダリング挙動そのものの変更
+- 正式識別子切替（Beacon.Next→Beacon）→ Gate D(R10) / MSIX → R11
 
 ## 変更可能ファイル
-src/**（ただし Beacon.Contracts・Beacon.PluginHost は変更禁止）, tests/**, Beacon.sln,
-src/Beacon.Distribution/**, src/Beacon.WinUI/Resources/DesignTokens.xaml（トークン追加）,
-docs/rebuild/MIGRATION.md（旧番号修正・プラグイン除外注記・マッピング確定）,
-docs/rebuild/DEPENDENCY_MAP.md・attribution.md（依存・移植追記）,
+src/**（ただし Beacon.Contracts は「SearchResultDto に TitleMatch を足す＋ContractVersion=3」を
+採用する場合のみ、事前報告の上で変更可。それ以外の Contracts 変更と Beacon.PluginHost 変更は禁止）,
+tests/**, Beacon.sln, src/Beacon.WinUI/Resources/DesignTokens.xaml（トークン追加）,
+docs/rebuild/DEPENDENCY_MAP.md・attribution.md（移植元StringMatcher/DiacriticsNormalizerの追記）,
+docs/rebuild/SPEC.md（§4の数値を再マッピングする場合のみ・報告と承認後）,
 docs/rebuild/LESSONS.md（記録基準を満たす失敗時のみ）
 
 ## 禁止事項
 - `Spotlight` の語（識別子・XAML・コメント・リソースキー・UI文字列・ログ・ファイル名すべて）
 - Contracts / Core / Platform.Windows への WPF・WinUI・WinForms 参照 /
-  WinUI本体プロセスへの System.Windows.* 追加
-- デリゲート・任意object・UI型のプロセス境界越し送信
-- DesignTokens.xaml 外への直値の色・寸法・時間
+  WinUI本体プロセスへの System.Windows.* 追加（FuzzyMatcher・DiacriticsNormalizer は純ロジックでCoreに置く）
+- デリゲート・任意object・UI型のプロセス境界越し送信 / Contractsの独断変更
+- DesignTokens.xaml 外への直値の色・寸法・時間（ハイライトの太さ・強調も含む）
 - B1記載外の新規NuGet / iNKORE由来物 / SegoeFluentIcons.ttf / Apple固有素材
-- Beacon-old側の変更 / 仕様の独自変更（SPEC・MIGRATIONと矛盾したら実装せず報告）
-- 保存先の無言切替（設定は既存の r1-settings.json、移行先は解決済みDataRoot配下のみ）
+- Beacon-old側の変更 / 移植元のMIT表記を落とすこと
+- SPEC §4 の承認済みスコア方針を黙って変えること（変更が要るなら報告して指示を仰ぐ）
 
 ## ビルド／検証（各Stage末に1〜3、全Stage完了後に全部）
 1. dotnet build Beacon.sln -c Release で0警告・0エラー
-2. dotnet test Beacon.sln -c Release で全テスト成功
-3. Test-NoUiReferences.ps1 がローカルで0件
+2. dotnet test Beacon.sln -c Release で全テスト成功（Stage 1で追加したマッチャ/ランキングのテスト含む）
+3. Test-NoUiReferences.ps1 がローカルで0件（FuzzyMatcher/DiacriticsNormalizerがCoreでUI非依存であること）
 4. Build-Portable.ps1 → Test-Portable.ps1（既定）→ Test-Portable.ps1 -UseActivationPipe
 5. ZIP内: Everything.dll(x64)あり / iNKORE・System.Drawing.Common・WPF系DLLなし
-6. 起動確認（Codexが実施。ここまでがCodexの検証範囲）: Portable展開物を起動し、
-   トレイ「設定」で設定画面を開く→ホットキー変更/QuickKey編集/各トグルの保存が
-   r1-settings.json に反映され再起動後も維持されることをログ/ファイルで確認。
-   Data\Logs\ に ERROR / Exception が出ていないこと、終了後に Beacon.Next系プロセスが
-   残らないことを確認する
-7. 移行の自動確認: 単体/結合テストで「旧設定なしの新規起動」「正常な旧設定からの移行」
-   「壊れた旧設定からの安全な起動」「移行失敗時のロールバックと旧版継続」
-   「ユーザー確認なしで旧データを削除しない」を固定する（実データが要る箇所は
-   テスト用フィクスチャで再現し、不可能な項目は理由付きで未確認と明記）
+6. 起動確認（Codexが実施。ここまでがCodexの検証範囲）:
+   - Portable展開物を起動し、"vsc" 等の頭字語・タイポ・文字飛ばしでアプリ/設定/ブックマークが
+     従来より拾えること、結果タイトルに一致文字の太字ハイライトが出ること、
+     並び順が完全一致>前方>部分の直感に沿うことをログ/目視前提で確認（体感判定はユーザーへ引き渡す）
+   - トレイ「設定」で新設定画面を開き、ホットキー変更/QuickKey編集（ドロップダウン）/除外アプリ追加削除/
+     各トグルが R1Storage に反映され再起動後も維持されることをファイルで確認
+   - Data\Logs\ に ERROR/Exception が出ていないこと、終了後に Beacon.Next系プロセスが残らないこと
 
 ## ユーザーが目視・手動で確認する（Codexは実施不要・報告に列挙するだけ）
-- 設定画面の見た目・トーンがランチャーと一貫しているか（体感）
-- ホットキーキャプチャUIの操作感・衝突時のロールバック挙動
-- Quick Key編集・除外アプリ指定の操作感
-- 実際の旧 %APPDATA%\Beacon データからの移行（確認ダイアログ・バックアップ・結果）
-- 日本語IME・Light/Dark・DPI 100〜200% が設定画面でも破綻しないこと
+- 検索の一致品質・並び順・ハイライトが旧WPF版に対して見劣りしないか（体感。本フェーズの主目的）
+- 設定画面の見た目・トーン・操作感がランチャーと一貫し、製品水準に達しているか（体感）
+- ホットキーキャプチャの操作感・衝突時ロールバック / QuickKey・除外アプリのリスト編集操作感
+- 日本語IME・Light/Dark・DPI 100〜200% が検索ハイライトと設定画面で破綻しないこと
 
-## 完了条件（PLAN.md Phase R7と同一）
-- 旧設定なしの新規起動 / 正常な旧設定からの移行 / 壊れた旧設定からの安全な起動 /
-  移行失敗時の旧版継続利用 / ユーザー確認なしで旧データを削除しない
-- 設定画面からホットキー・Quick Key・個人化/クリップボードのON/OFF・全リセット・
-  除外アプリ・Everything案内・About/Third-party noticesが操作でき、r1-settings.json に永続化される
-- R4〜R6の完了条件（DPI・複数モニター・IME・レンダリング挙動・アクリル/枠）に退行がない
+## 完了条件
+- テキスト一致がすべて Beacon.Core の単一 FuzzyMatcher を通り、①の手書きMatchScoreと②のContainsが撤去され、
+  ③RankingEngineが同一マッチ品質スケール上で SPEC §4 の相対順序を保って合成される
+- 結果タイトルに一致文字の太字ハイライトが表示され、色は変えていない（SPEC §3.3尊重）
+- 設定画面が左ナビ等の製品水準レイアウトで、ホットキー/QuickKey(ドロップダウン)/除外アプリ(リスト)/
+  個人化・クリップボードのトグルと破壊的操作の確認/Everything案内/About が
+  キーボードのみで操作でき、R7の保存先・サービス連携・移行ロジックに退行がない
+- R4〜R7の完了条件（DPI・複数モニター・IME・レンダリング・アクリル/枠・クリップボード監視・Legacy移行）に退行なし
 - Codexの責任範囲: 自動検証（build/test/NoUiRefs/Portableスモーク）＋起動確認＋
-  移行テスト＋設定永続化の確認まで。体感・実旧データ移行の目視はユーザー確認待ちとして列挙
+  マッチャ/ランキングのテスト固定まで。検索体感・設定画面の見た目の最終判定はユーザー確認待ちとして列挙
 
 ## 失敗時
 AGENTS.md「環境の既知制約」該当は記録せず固定ルールに従って切り替える。それ以外は
-docs/rebuild/LESSONS.md の記録基準を満たす場合のみ記録してから再試行。SPEC/MIGRATIONと
-矛盾する実装を勝手に進めず、理由と案を報告して指示を仰ぐ。旧データを扱う処理は
-非破壊・ロールバック可能を最優先にする。
+docs/rebuild/LESSONS.md の記録基準を満たす場合のみ記録してから再試行。SPEC（特に §4 スコア方針）と
+矛盾する実装や Contracts の独断変更を勝手に進めず、理由と案を報告して指示を仰ぐ。
 
 ## Git差分要約
 Stageごとに変更・追加ファイル一覧と概要を報告する。コミットはユーザーが行う
 （Stage完了ごとにコミットを促してよい）。
+```
+
+## Phase R8.1: 設定画面の起動不能修正 + 製品水準仕上げ（R8是正）
+
+**状況（2026-07-23）: 本フェーズはユーザー承認の例外としてClaudeが直接実装済み**（Codex実行不要）。Stage A/B、アプリアイコン適用（exe / ウィンドウ / トレイ / About）、BEACON_SMOKE_SETTINGSスモークまで完了。build 0警告0エラー / 全テスト成功 / Test-NoUiReferences 0件 / Test-Portable（既定・-UseActivationPipe）成功。残りはユーザー目視確認のみ。
+
+前提: 現行作業ツリー（`feature/rebuild-r7`）の R8 実装（FuzzyMatcher統一・SettingsWindow）を保持したまま是正する。原因は確定済み（憶測での再調査は不要）: `App.xaml` に `XamlControlsResources` が無く、`NavigationView` の生成が `XamlParseException: Cannot find a Resource with the Name/Key TabViewButtonBackground` で失敗する（microsoft/microsoft-ui-xaml #5406・#2629 と同一事象。MainWindow は generic.xaml で足りる基本コントロールのみのため顕在化しなかった）。
+
+```
+あなたはBeacon（WinUI 3 Portable-firstランチャー）のPhase R8.1を担当する。
+目的は2つ。(1) 設定画面が開かないバグの修正と再発の機械的防止。
+(2) R8 Stage 2 で未達だった設定画面の見た目・操作を製品水準（ランチャーと同じ
+ミニマルなトーン）へ仕上げる。R8プロンプトの「読むべき文書」「禁止事項」
+「非対象範囲」「Git差分要約」はそのまま適用する。設定の保存先（R1Storageキー）・
+コールバック配線・Legacy移行・検索エンジンは変更しない。
+
+## Stage A: 起動修正（最小差分・最優先）
+1. src/Beacon.WinUI/App.xaml の MergedDictionaries の先頭に
+   <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" /> を追加する。
+   Resources/DesignTokens.xaml は後段に置いたまま（後勝ちで上書きを維持）。
+2. XamlControlsResources 追加で WinUI 既定テーマ資源が全て有効になるため、
+   ランチャー側（検索バー・結果リスト・アクリル）の見た目退行がないか起動確認する。
+   DesignTokens の TextControl* / ListViewItemBackground* 上書きが効いていること。
+3. 再発の機械的防止: 環境変数 BEACON_SMOKE_SETTINGS=1 のとき、起動完了後に
+   ShowSettings を1回呼ぶフックを追加し、src/Beacon.Distribution/Test-Portable.ps1 の
+   起動スモークで同変数を設定する。設定画面の生成が失敗すれば ShowSettings が
+   ERROR をログへ書き、既存の「ログに ERROR|Exception があれば失敗」検査が落ちること。
+4. Stage A 完了時点で Build-Portable → Test-Portable を通し、実機で
+   トレイ「設定」から設定画面が開くことを確認してから Stage B へ進む。
+
+## Stage B: 設定画面の仕上げ（R8 Stage 2 の未達分）
+1. 設定行スタイル: R8 Stage 2-2 の「行単位のカード/リスト風
+   （アイコン+ラベル+説明+右側コントロール）」を実装する。素の TextBox/Button の
+   縦羅列をやめる。色・寸法・角丸・間隔・フォントサイズは DesignTokens.xaml の
+   トークン経由（直値禁止。必要なトークンは追加してよい）。
+2. 即時適用: Quick Keys・除外アプリの「保存」ボタンを廃止し、行の追加・削除・編集で
+   即検証・即保存する（macOS System Settings と同じ操作モデル）。無効行（空キー・
+   重複キー）はその行のインラインエラーで示し、保存対象から除外する。
+   「既定へ戻す」ボタンは維持する。
+3. 確認ダイアログ: Win32 MessageBoxW を設定画面では使わず ContentDialog へ置換する。
+   併せて現在「個人化データを全リセット」は SettingsWindow.OnResetPersonalization と
+   MainWindow.ResetPersonalization の両方が確認を出し**ダイアログが2回連続で出る**。
+   確認責務を1箇所（実行側 MainWindow）へ寄せ、確認は必ず1回にする。
+   文言は「個人化データをすべて削除しますか？」へ統一する（トレイ経路と同一文言）。
+4. wayfinding: 固定の大見出し「設定」をやめ、選択中セクション名（一般 / 検索 /
+   Quick Keys / プライバシー / About）をページ見出しへ反映する。
+5. タイポグラフィ統一: 見出しだけでなく本文・説明・コントロール文字列にも
+   LauncherFontFamily 系（Zen Kaku Gothic New）を適用し、ランチャーとトーンを揃える。
+6. ホットキー行: TextBox Header の長文（「現在の割り当て（修飾キーと主キーを
+   押してください）」）をやめ、行カードの「ラベル=グローバル ホットキー /
+   説明=クリックして修飾キーと主キーを押すと変更 / 右側=現在の割り当て表示」へ分離。
+   登録失敗時のインラインエラーとロールバック挙動は維持する。
+
+## 検証（Stage A 末に 1〜3、全体完了後に全部）
+1. dotnet build / dotnet test -c Release 0警告0エラー・全テスト成功
+2. Test-NoUiReferences.ps1 0件
+3. Build-Portable.ps1 → Test-Portable.ps1（BEACON_SMOKE_SETTINGS による設定画面生成込み）
+   → Test-Portable.ps1 -UseActivationPipe
+4. 起動確認（Codex範囲）: トレイ「設定」で設定画面が開く / 各セクション切替 /
+   ホットキー変更・QuickKey編集・除外アプリ編集が R1Storage へ即時反映され再起動後も
+   維持される / Data\Logs に ERROR/Exception なし / 終了後にプロセス残留なし
+
+## ユーザーが目視・手動で確認する（列挙して引き渡す）
+- 設定画面のトーン・行カードの見た目がランチャーと一貫し製品水準か（体感）
+- 即時適用の操作感 / ContentDialog の確認が1回だけ出ること
+- Light/Dark・DPI 100〜200% で設定画面・ランチャー双方が破綻しないこと
+- XamlControlsResources 追加後のランチャー外観に退行がないこと（体感）
 ```

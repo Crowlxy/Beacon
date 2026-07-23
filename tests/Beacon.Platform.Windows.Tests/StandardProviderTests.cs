@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Beacon.Contracts;
+using Beacon.Core;
 using Beacon.Platform.Windows;
 using NUnit.Framework;
 
@@ -18,11 +19,11 @@ public sealed class StandardProviderTests
     [TestCase("vsc", "Visual Studio Code")]
     [TestCase("studio code", "Visual Studio Code")]
     public void ApplicationMatchingIncludesLocalizedAndFuzzyNames(string query, string candidate) =>
-        Assert.That(AppSearchProvider.MatchScore(query, candidate), Is.GreaterThan(0));
+        Assert.That(FuzzyMatcher.Match(query, candidate).Success, Is.True);
 
     [Test]
     public void ApplicationMatchingRejectsUnrelatedNames() =>
-        Assert.That(AppSearchProvider.MatchScore("メモ", "電卓"), Is.Zero);
+        Assert.That(FuzzyMatcher.Match("メモ", "電卓").Success, Is.False);
 
     [Test]
     public async Task ShellRequiresPrefixAndReturnsCommand()

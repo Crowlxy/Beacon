@@ -13,6 +13,7 @@ public sealed class ClipboardHistoryService : IDisposable
     private readonly Action<string>? _log;
     private ClipboardHistory _history;
     public bool Enabled { get; private set; }
+    public IReadOnlyCollection<string> ExcludedApplications { get; set; } = Array.Empty<string>();
     public IReadOnlyList<ClipboardHistoryItem> Items => _history.Items;
 
     public ClipboardHistoryService(IntPtr windowHandle, string dataRoot, Action<string>? log = null)
@@ -33,7 +34,7 @@ public sealed class ClipboardHistoryService : IDisposable
 
     public void OnClipboardUpdate()
     {
-        if (!Enabled || !ClipboardReader.TryRead(_windowHandle, out var kind, out var content)) return;
+        if (!Enabled || ClipboardReader.IsOwnerExcluded(ExcludedApplications) || !ClipboardReader.TryRead(_windowHandle, out var kind, out var content)) return;
         if (_history.Add(kind, content)) Save();
     }
 
@@ -99,6 +100,24 @@ internal static partial class ClipboardReader
         finally { _ = CloseClipboard(); }
     }
 
+    internal static bool IsOwnerExcluded(IEnumerable<string> exclusions)
+    {
+        var owner = GetClipboardOwner();
+        if (owner == IntPtr.Zero) return false;
+        _ = GetWindowThreadProcessId(owner, out var processId);
+        if (processId == 0) return false;
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)processId);
+            return MatchesExcludedApplication(exclusions, process.ProcessName);
+        }
+        catch (ArgumentException) { return false; }
+    }
+
+    internal static bool MatchesExcludedApplication(IEnumerable<string> exclusions, string processName)
+        => exclusions.Select(x => Path.GetFileNameWithoutExtension(x.Trim()))
+            .Any(x => x.Equals(processName, StringComparison.OrdinalIgnoreCase));
+
     private static bool ReadUnicode(uint format, out string content)
     {
         content = string.Empty;
@@ -150,6 +169,8 @@ internal static partial class ClipboardReader
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool OpenClipboard(IntPtr owner);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseClipboard();
     [DllImport("user32.dll")] private static extern IntPtr GetClipboardData(uint format);
+    [DllImport("user32.dll")] private static extern IntPtr GetClipboardOwner();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsClipboardFormatAvailable(uint format);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterClipboardFormat(string format);
     [DllImport("kernel32.dll")] private static extern IntPtr GlobalLock(IntPtr memory);

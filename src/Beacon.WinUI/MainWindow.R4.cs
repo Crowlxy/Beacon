@@ -202,11 +202,12 @@ public sealed partial class MainWindow
     private void ApplyResults(SearchResultDto[] visible, bool resolveIcons = true)
     {
         var changed = false;
+        TryQuickKey(QueryBox.Text, out var matchQuery, out _);
         for (var index = 0; index < visible.Length; index++)
         {
             if (index < _results.Count && _results[index].Result.Id == visible[index].Id)
             {
-                if (_results[index].Update(visible[index]))
+                if (_results[index].Update(visible[index], matchQuery))
                 {
                     changed = true;
                     if (resolveIcons) _ = ResolveIconAsync(_results[index]);
@@ -219,11 +220,11 @@ public sealed partial class MainWindow
             if (existing >= 0)
             {
                 _results.Move(existing, index);
-                if (_results[index].Update(visible[index]) && resolveIcons) _ = ResolveIconAsync(_results[index]);
+                if (_results[index].Update(visible[index], matchQuery) && resolveIcons) _ = ResolveIconAsync(_results[index]);
             }
             else
             {
-                var row = new ResultRow(visible[index]);
+                var row = new ResultRow(visible[index], matchQuery);
                 _results.Insert(index, row);
                 if (resolveIcons) _ = ResolveIconAsync(row);
             }
@@ -363,12 +364,14 @@ public sealed partial class MainWindow
 
 public sealed class ResultRow : System.ComponentModel.INotifyPropertyChanged
 {
-    public ResultRow(SearchResultDto result)
+    public ResultRow(SearchResultDto result, string matchQuery)
     {
         Result = result;
+        MatchQuery = matchQuery;
         Glyph = GlyphFor(result);
     }
     public SearchResultDto Result { get; private set; }
+    public string MatchQuery { get; private set; }
     public string Glyph { get; private set; }
     public Microsoft.UI.Xaml.Media.ImageSource? Image { get; private set; }
     public Visibility GlyphVisibility => Image is null ? Visibility.Visible : Visibility.Collapsed;
@@ -377,12 +380,16 @@ public sealed class ResultRow : System.ComponentModel.INotifyPropertyChanged
     public Visibility QuickKeyVisibility => QuickKey is null ? Visibility.Collapsed : Visibility.Visible;
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
-    public bool Update(SearchResultDto result)
+    public bool Update(SearchResultDto result, string matchQuery)
     {
-        if (ReferenceEquals(Result, result)) return false;
+        var resultChanged = !ReferenceEquals(Result, result);
+        var queryChanged = !string.Equals(MatchQuery, matchQuery, StringComparison.Ordinal);
+        if (!resultChanged && !queryChanged) return false;
         var iconChanged = Result.Icon != result.Icon;
         Result = result;
-        PropertyChanged?.Invoke(this, new(nameof(Result)));
+        MatchQuery = matchQuery;
+        if (resultChanged) PropertyChanged?.Invoke(this, new(nameof(Result)));
+        if (queryChanged) PropertyChanged?.Invoke(this, new(nameof(MatchQuery)));
         PropertyChanged?.Invoke(this, new(nameof(QuickKey)));
         PropertyChanged?.Invoke(this, new(nameof(QuickKeyVisibility)));
         if (iconChanged)

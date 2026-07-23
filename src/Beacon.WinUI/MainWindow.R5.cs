@@ -320,7 +320,10 @@ public sealed partial class MainWindow
     private static bool TryQuickKey(string query, out string searchText, out ActionDescriptor action)
     {
         var parts = query.TrimEnd().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        action = parts.Length > 1 ? BuiltInActions.FindQuickKey(parts[^1])! : null!;
+        var values = R1Storage.Get("QuickKeys", new Dictionary<string, string>());
+        action = parts.Length > 1 && values.TryGetValue(parts[^1], out var actionId)
+            ? BuiltInActions.All.FirstOrDefault(x => x.Id == actionId)!
+            : null!;
         searchText = action is null ? query : string.Join(' ', parts[..^1]);
         return action is not null;
     }
@@ -328,6 +331,6 @@ public sealed partial class MainWindow
     private void UpdateGhostCompletion(string query)
     {
         var last = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
-        GhostCompletion.Text = last.Length == 0 ? string.Empty : BuiltInActions.All.Select(x => x.QuickKey).FirstOrDefault(x => x is not null && x.StartsWith(last, StringComparison.OrdinalIgnoreCase) && x.Length > last.Length) ?? string.Empty;
+        GhostCompletion.Text = last.Length == 0 ? string.Empty : R1Storage.Get("QuickKeys", new Dictionary<string, string>()).Keys.FirstOrDefault(x => x.StartsWith(last, StringComparison.OrdinalIgnoreCase) && x.Length > last.Length) ?? string.Empty;
     }
 }

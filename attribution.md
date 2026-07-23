@@ -55,6 +55,10 @@ Beacon includes the following selectively migrated Flow Launcher/Wox MIT-license
 
 Flow Launcher and Wox contributors retain their original copyrights. The MIT License text above applies to these migrated portions.
 
+## R8 fuzzy matching
+
+`src/Beacon.Core/FuzzyMatcher.cs` and `DiacriticsNormalizer.cs` selectively adapt MIT-licensed matching logic from `Beacon-old/Flow.Launcher.Infrastructure/StringMatcher.cs`, `DiacriticsNormalizer.cs`, and `Flow.Launcher.Plugin/SharedModels/MatchResult.cs`. UI, IoC, settings, and Pinyin dependencies were not migrated. Flow Launcher and Wox contributors retain their original copyrights.
+
 ## Bundled fonts
 
 Beacon bundles `ZenKakuGothicNew-Regular.ttf`, `ZenKakuGothicNew-Medium.ttf`, and `ZenKakuGothicNew-Bold.ttf` from the Zen Kaku Gothic New project, copyright 2022 The Zen Project Authors. Beacon also bundles `InterVariable.ttf` from the Inter project, copyright 2016 The Inter Project Authors. Both font families are distributed under the SIL Open Font License 1.1; the complete license and copyright notices are included at `fonts/OFL-1.1.txt` and in the Portable output under `Assets/Fonts/OFL-1.1.txt`.

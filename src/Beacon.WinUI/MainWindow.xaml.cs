@@ -22,6 +22,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly FileSearchProvider _fileSearchProvider;
     private readonly BrowserBookmarkProvider _bookmarkProvider;
     private bool _exiting;
+    private SettingsWindow? _settingsWindow;
 
     public MainWindow(string dataRoot)
     {
@@ -55,12 +56,16 @@ public sealed partial class MainWindow : Window, IDisposable
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(windowHandle);
         _appWindow = AppWindow.GetFromWindowId(windowId);
         _appWindow.Closing += OnClosing;
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "App.ico");
+        if (File.Exists(iconPath)) _appWindow.SetIcon(iconPath);
         R1Storage.WriteLog("INFO AppWindow acquired");
         _clipboardHistory = new ClipboardHistoryService(windowHandle, dataRoot, R1Storage.WriteLog);
+        _clipboardHistory.ExcludedApplications = R1Storage.Get("ClipboardExcludedApplications", Array.Empty<string>());
         if (R1Storage.GetBoolean("ClipboardEnabled", false)) _clipboardHistory.SetEnabled(true);
         _nativeWindow = new NativeWindowController(
             windowHandle,
             ShowLauncher,
+            ShowSettings,
             RepositionLauncher,
             ExitApplication,
             () => _clipboardHistory.Enabled,
@@ -73,6 +78,44 @@ public sealed partial class MainWindow : Window, IDisposable
         _ = RefreshAppCacheAsync();
         _bookmarkProvider.Preload();
         R1Storage.WriteLog("INFO Hotkey and tray registered");
+        _ = ShowEverythingNoticeOnceAsync();
+    }
+
+    internal void ShowSettings()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                _settingsWindow ??= new SettingsWindow(
+                    _dataRoot,
+                    _nativeWindow.TryChangeHotkey,
+                    () => _clipboardHistory.Enabled,
+                    ToggleClipboardHistory,
+                    () => _usageHistory.Enabled,
+                    TogglePersonalization,
+                    ResetPersonalizationCore,
+                    _clipboardHistory.Clear,
+                    ApplyClipboardExclusions);
+                _settingsWindow.Activate();
+                R1Storage.WriteLog("INFO Settings window opened");
+            }
+            catch (Exception exception)
+            {
+                R1Storage.WriteLog($"ERROR Settings open failed: {exception}");
+            }
+        });
+    }
+
+    private void ApplyClipboardExclusions(string[] values) => _clipboardHistory.ExcludedApplications = values;
+
+    private async Task ShowEverythingNoticeOnceAsync()
+    {
+        if (R1Storage.GetBoolean("EverythingNoticeShown", false)) return;
+        var availability = await Beacon.Platform.Windows.Everything.EverythingApi.GetAvailabilityAsync(CancellationToken.None);
+        if (availability.Available) return;
+        R1Storage.SetBoolean("EverythingNoticeShown", true);
+        DispatcherQueue.TryEnqueue(() => _ = NativeMethods.MessageBoxW(_windowHandle, "Everythingを起動すると、ファイル検索が高速になります。Windows Indexでも検索できます。", "Beacon", 0));
     }
 
     private void ConfigureBackdrop()
@@ -214,6 +257,11 @@ public sealed partial class MainWindow : Window, IDisposable
     private void ResetPersonalization()
     {
         if (NativeMethods.MessageBoxW(_windowHandle, "個人化データをすべて削除しますか？", "Beacon", NativeMethods.MessageBoxYesNoWarning) != NativeMethods.MessageBoxResultYes) return;
+        ResetPersonalizationCore();
+    }
+
+    private void ResetPersonalizationCore()
+    {
         _usageHistory.Reset();
         R1Storage.WriteLog("INFO Personalization data reset");
     }

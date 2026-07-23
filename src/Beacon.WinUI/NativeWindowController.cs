@@ -20,6 +20,7 @@ internal sealed class NativeWindowController : IDisposable
     private const uint RightButtonUp = 0x0205;
     private const uint HotkeyId = 0xB001;
     private const uint ShowMenuId = 1;
+    private const uint SettingsMenuId = 7;
     private const uint StartupMenuId = 2;
     private const uint ClipboardMenuId = 3;
     private const uint PersonalizationMenuId = 4;
@@ -42,9 +43,14 @@ internal sealed class NativeWindowController : IDisposable
     private const uint ModifierNoRepeat = 0x4000;
     private const uint VirtualKeySpace = 0x20;
     private const int DefaultApplicationIcon = 32512;
+    private const uint ImageIcon = 1;
+    private const uint LoadFromFile = 0x00000010;
+    private const int SmallIconWidthMetric = 49;
+    private const int SmallIconHeightMetric = 50;
 
     private readonly IntPtr _windowHandle;
     private readonly Action _show;
+    private readonly Action _showSettings;
     private readonly Action _reposition;
     private readonly Action _exit;
     private readonly Func<bool> _clipboardEnabled;
@@ -56,11 +62,14 @@ internal sealed class NativeWindowController : IDisposable
     private readonly NativeMethods.WindowProcedure _windowProcedure;
     private readonly IntPtr _previousWindowProcedure;
     private NativeMethods.NotifyIconData _notifyIconData;
+    private IntPtr _trayIconHandle;
+    private bool _trayIconFromFile;
     private bool _disposed;
 
     public NativeWindowController(
         IntPtr windowHandle,
         Action show,
+        Action showSettings,
         Action reposition,
         Action exit,
         Func<bool> clipboardEnabled,
@@ -72,6 +81,7 @@ internal sealed class NativeWindowController : IDisposable
     {
         _windowHandle = windowHandle;
         _show = show;
+        _showSettings = showSettings;
         _reposition = reposition;
         _exit = exit;
         _clipboardEnabled = clipboardEnabled;
@@ -90,15 +100,14 @@ internal sealed class NativeWindowController : IDisposable
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to attach the Beacon window procedure.");
         }
 
-        if (!NativeMethods.RegisterHotKey(
-                windowHandle,
-                HotkeyId,
-                ModifierAlt | ModifierShift | ModifierNoRepeat,
-                VirtualKeySpace))
+        var initialHotkey = R1Storage.Get("GlobalHotkey", "Alt+Shift+Space");
+        if (!TryRegisterHotkey(initialHotkey, out var error))
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Alt+Shift+Space is already registered.");
+            if (!TryRegisterHotkey("Alt+Shift+Space", out error)) throw new Win32Exception(error, "Alt+Shift+Space is already registered.");
+            R1Storage.Set("GlobalHotkey", "Alt+Shift+Space");
         }
 
+        LoadTrayIcon();
         _notifyIconData = new NativeMethods.NotifyIconData
         {
             Size = Marshal.SizeOf<NativeMethods.NotifyIconData>(),
@@ -106,7 +115,7 @@ internal sealed class NativeWindowController : IDisposable
             Id = 1,
             Flags = NotifyIconMessage | NotifyIconIcon | NotifyIconTip,
             CallbackMessage = TrayMessage,
-            IconHandle = NativeMethods.LoadIconW(IntPtr.Zero, (IntPtr)DefaultApplicationIcon),
+            IconHandle = _trayIconHandle,
             Tip = "Beacon.Next",
             Info = string.Empty,
             InfoTitle = string.Empty,
@@ -119,6 +128,26 @@ internal sealed class NativeWindowController : IDisposable
 
         _notifyIconData.Version = NotifyIconVersion4;
         NativeMethods.ShellNotifyIconW(NotifyIconSetVersion, ref _notifyIconData);
+    }
+
+    private void LoadTrayIcon()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "App.ico");
+        if (File.Exists(path))
+        {
+            _trayIconHandle = NativeMethods.LoadImageW(
+                IntPtr.Zero,
+                path,
+                ImageIcon,
+                NativeMethods.GetSystemMetrics(SmallIconWidthMetric),
+                NativeMethods.GetSystemMetrics(SmallIconHeightMetric),
+                LoadFromFile);
+            _trayIconFromFile = _trayIconHandle != IntPtr.Zero;
+        }
+        if (_trayIconHandle == IntPtr.Zero)
+        {
+            _trayIconHandle = NativeMethods.LoadIconW(IntPtr.Zero, (IntPtr)DefaultApplicationIcon);
+        }
     }
 
     private IntPtr WindowProcedure(IntPtr windowHandle, uint message, IntPtr wParam, IntPtr lParam)
@@ -180,6 +209,7 @@ internal sealed class NativeWindowController : IDisposable
         try
         {
             NativeMethods.AppendMenuW(menu, MenuString, ShowMenuId, "Show Beacon");
+            NativeMethods.AppendMenuW(menu, MenuString, SettingsMenuId, "設定");
             var startupFlags = MenuString | (StartupRegistration.IsEnabled() ? MenuChecked : 0);
             NativeMethods.AppendMenuW(menu, startupFlags, StartupMenuId, "スタートアップに登録");
             NativeMethods.AppendMenuW(menu, MenuString | (_clipboardEnabled() ? MenuChecked : 0), ClipboardMenuId, "クリップボード履歴");
@@ -200,6 +230,7 @@ internal sealed class NativeWindowController : IDisposable
             {
                 _show();
             }
+            else if (command == SettingsMenuId) _showSettings();
             else if (command == ExitMenuId)
             {
                 _exit();
@@ -219,6 +250,47 @@ internal sealed class NativeWindowController : IDisposable
         }
     }
 
+    public bool TryChangeHotkey(string value, out string error)
+    {
+        NativeMethods.UnregisterHotKey(_windowHandle, HotkeyId);
+        if (TryRegisterHotkey(value, out var code))
+        {
+            R1Storage.Set("GlobalHotkey", value);
+            error = string.Empty;
+            return true;
+        }
+
+        var previous = R1Storage.Get("GlobalHotkey", "Alt+Shift+Space");
+        _ = TryRegisterHotkey(previous, out _);
+        error = new Win32Exception(code).Message;
+        return false;
+    }
+
+    private bool TryRegisterHotkey(string value, out int error)
+    {
+        var parts = value.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        uint modifiers = ModifierNoRepeat;
+        uint key = 0;
+        foreach (var part in parts)
+        {
+            if (part.Equals("Alt", StringComparison.OrdinalIgnoreCase)) modifiers |= ModifierAlt;
+            else if (part.Equals("Shift", StringComparison.OrdinalIgnoreCase)) modifiers |= ModifierShift;
+            else if (part.Equals("Ctrl", StringComparison.OrdinalIgnoreCase)) modifiers |= 0x0002;
+            else if (part.Equals("Win", StringComparison.OrdinalIgnoreCase)) modifiers |= 0x0008;
+            else if (part.Equals("Space", StringComparison.OrdinalIgnoreCase)) key = VirtualKeySpace;
+            else if (part.Length == 1 && char.IsLetterOrDigit(part[0])) key = char.ToUpperInvariant(part[0]);
+            else if (Enum.TryParse<Windows.System.VirtualKey>(part, true, out var virtualKey)) key = (uint)virtualKey;
+        }
+        if ((modifiers & ~ModifierNoRepeat) == 0 || key == 0)
+        {
+            error = 87;
+            return false;
+        }
+        var registered = NativeMethods.RegisterHotKey(_windowHandle, HotkeyId, modifiers, key);
+        error = registered ? 0 : Marshal.GetLastWin32Error();
+        return registered;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -231,6 +303,11 @@ internal sealed class NativeWindowController : IDisposable
         if (_notifyIconData.Size != 0)
         {
             NativeMethods.ShellNotifyIconW(NotifyIconDelete, ref _notifyIconData);
+        }
+
+        if (_trayIconFromFile)
+        {
+            NativeMethods.DestroyIcon(_trayIconHandle);
         }
 
         if (_previousWindowProcedure != IntPtr.Zero)
@@ -393,6 +470,16 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern IntPtr LoadIconW(IntPtr instance, IntPtr iconName);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern IntPtr LoadImageW(IntPtr instance, string name, uint type, int width, int height, uint flags);
+
+    [DllImport("user32.dll")]
+    internal static extern int GetSystemMetrics(int index);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyIcon(IntPtr icon);
+
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr CreatePopupMenu();
 
@@ -481,5 +568,7 @@ internal static class NativeMethods
     private static extern short GetKeyState(int virtualKey);
 
     internal static bool ControlPressed() => GetKeyState(0x11) < 0;
+    internal static bool AltPressed() => GetKeyState(0x12) < 0;
     internal static bool ShiftPressed() => GetKeyState(0x10) < 0;
+    internal static bool WindowsPressed() => GetKeyState(0x5B) < 0 || GetKeyState(0x5C) < 0;
 }

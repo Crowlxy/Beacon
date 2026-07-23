@@ -110,6 +110,10 @@ Plugins/* → Flow.Launcher.Plugin
 
 表示義務はリリースへ同梱する`attribution.md`へ反映した。パッケージ追加・更新は行っていない。
 
+### R8で採用した移植ソース
+
+新規パッケージ依存はない。`src/Beacon.Core/FuzzyMatcher.cs` と `DiacriticsNormalizer.cs` は `Beacon-old/Flow.Launcher.Infrastructure/StringMatcher.cs`、`DiacriticsNormalizer.cs`、`Flow.Launcher.Plugin/SharedModels/MatchResult.cs` の検索ロジックをUI・IoC・設定・Pinyin依存なしでアダプトした。Flow Launcher / WoxのMIT表記を各ファイル冒頭と `attribution.md` に維持する。
+
 ## B2. 不採用
 
 | 対象 | 理由 |

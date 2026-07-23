@@ -1,0 +1,161 @@
+<Window
+    x:Class="Beacon.WinUI.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Beacon 設定">
+    <NavigationView
+        x:Name="SettingsNavigation"
+        PaneDisplayMode="Left"
+        OpenPaneLength="{StaticResource SettingsNavPaneWidth}"
+        IsBackButtonVisible="Collapsed"
+        IsPaneToggleButtonVisible="False"
+        IsSettingsVisible="False"
+        FontFamily="{StaticResource LauncherFontFamily}"
+        SelectionChanged="OnSettingsNavigationChanged">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="一般" Tag="general" Icon="Setting" />
+            <NavigationViewItem Content="検索" Tag="search" Icon="Find" />
+            <NavigationViewItem Content="Quick Keys" Tag="quickkeys" Icon="Keyboard" />
+            <NavigationViewItem Content="プライバシー" Tag="privacy" Icon="Permissions" />
+            <NavigationViewItem Content="About" Tag="about" Icon="Help" />
+        </NavigationView.MenuItems>
+        <ScrollViewer>
+            <StackPanel MaxWidth="{StaticResource SettingsContentMaxWidth}" Padding="{StaticResource SettingsPagePadding}">
+                <TextBlock x:Name="PageTitle" Style="{StaticResource SettingsPageTitleStyle}" Margin="{StaticResource SettingsTitleMargin}" />
+
+                <StackPanel x:Name="GeneralSection" Spacing="{StaticResource SettingsCardSpacing}">
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE765;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="グローバル ホットキー" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="欄を選択し、修飾キーと主キーを押して変更します" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <TextBox
+                                x:Name="HotkeyBox"
+                                Grid.Column="2"
+                                Width="{StaticResource SettingsHotkeyBoxWidth}"
+                                IsReadOnly="True"
+                                TextAlignment="Center"
+                                FontFamily="{StaticResource QuickKeyFontFamily}"
+                                VerticalAlignment="Center"
+                                KeyDown="OnHotkeyKeyDown" />
+                        </Grid>
+                    </Border>
+                    <TextBlock x:Name="HotkeyError" Style="{StaticResource SettingsErrorTextStyle}" Visibility="Collapsed" />
+                </StackPanel>
+
+                <StackPanel x:Name="SearchSection" Spacing="{StaticResource SettingsCardSpacing}" Visibility="Collapsed">
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE721;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Everything 連携" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="Everythingが起動しているとファイル検索が高速になります（導入は任意）" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="案内を再表示" VerticalAlignment="Center" Click="OnResetEverythingNotice" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="QuickKeysSection" Spacing="{StaticResource SettingsCardSpacing}" Visibility="Collapsed">
+                    <TextBlock Text="キーに内蔵アクションを割り当てます。変更は即座に保存されます。" Style="{StaticResource SettingsDescriptionStyle}" Margin="{StaticResource SettingsErrorMargin}" />
+                    <StackPanel x:Name="QuickKeysRows" Spacing="{StaticResource SettingsCardSpacing}" Margin="{StaticResource SettingsTitleMargin}" />
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource SettingsItemSpacing}">
+                        <Button Content="割り当てを追加" Click="OnAddQuickKey" />
+                        <Button Content="既定へ戻す" Click="OnResetQuickKeys" />
+                    </StackPanel>
+                    <TextBlock x:Name="QuickKeysError" Style="{StaticResource SettingsErrorTextStyle}" Visibility="Collapsed" />
+                </StackPanel>
+
+                <StackPanel x:Name="PrivacySection" Spacing="{StaticResource SettingsCardSpacing}" Visibility="Collapsed">
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE77B;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="個人化ランキング" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="選択履歴から検索結果の順位を調整します（ローカル処理のみ）" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="PersonalizationToggle" Grid.Column="2" OnContent="{x:Null}" OffContent="{x:Null}" MinWidth="0" VerticalAlignment="Center" Toggled="OnPersonalizationToggled" />
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE74D;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="個人化データ" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="保存された選択履歴をすべて削除します" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="すべて削除" VerticalAlignment="Center" Click="OnResetPersonalization" />
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE77F;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="クリップボード履歴" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="コピーしたテキストを検索できるようにします（ローカル保存のみ）" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="ClipboardToggle" Grid.Column="2" OnContent="{x:Null}" OffContent="{x:Null}" MinWidth="0" VerticalAlignment="Center" Toggled="OnClipboardToggled" />
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE74D;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="クリップボード履歴の削除" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="保存された履歴をすべて削除します" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="すべて削除" VerticalAlignment="Center" Click="OnClearClipboard" />
+                        </Grid>
+                    </Border>
+                    <TextBlock Text="除外するアプリ" Style="{StaticResource SettingsGroupHeaderStyle}" />
+                    <TextBlock Text="指定したプロセス名・実行ファイルからのコピーは記録しません。変更は即座に保存されます。" Style="{StaticResource SettingsDescriptionStyle}" Margin="{StaticResource SettingsErrorMargin}" />
+                    <StackPanel x:Name="ExcludedAppsRows" Spacing="{StaticResource SettingsCardSpacing}" Margin="{StaticResource SettingsTitleMargin}" />
+                    <Button Content="アプリを追加" HorizontalAlignment="Left" Click="OnAddExcludedApp" />
+                </StackPanel>
+
+                <StackPanel x:Name="AboutSection" Spacing="{StaticResource SettingsItemSpacing}" Visibility="Collapsed" HorizontalAlignment="Center" Padding="{StaticResource SettingsPagePadding}">
+                    <Image Source="ms-appx:///Assets/App.png" Width="{StaticResource SettingsAboutIconSize}" Height="{StaticResource SettingsAboutIconSize}" HorizontalAlignment="Center" />
+                    <TextBlock Text="Beacon" FontFamily="{StaticResource LauncherBoldFontFamily}" FontSize="{StaticResource SettingsSectionTitleSize}" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="VersionText" Style="{StaticResource SettingsDescriptionStyle}" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="ContractText" Style="{StaticResource SettingsDescriptionStyle}" HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource SettingsItemSpacing}" HorizontalAlignment="Center" Margin="{StaticResource SettingsGroupHeaderMargin}">
+                        <Button Content="Third-party notices" Click="OnOpenAttribution" />
+                        <Button Content="LICENSE" Click="OnOpenLicense" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </NavigationView>
+</Window>

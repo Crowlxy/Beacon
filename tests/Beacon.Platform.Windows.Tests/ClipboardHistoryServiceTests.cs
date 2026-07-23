@@ -23,4 +23,11 @@ public sealed class ClipboardHistoryServiceTests
         Assert.That(results, Has.Count.LessThanOrEqualTo(3));
         Assert.That(results.All(x => x.FilePath is not null), Is.True);
     }
+
+    [TestCase("KeePass", "keepass.exe")]
+    [TestCase("1Password", @"C:\Apps\1Password.exe")]
+    public void ClipboardOwnerExclusionsAcceptProcessNamesAndExecutablePaths(string processName, string exclusion)
+    {
+        Assert.That(ClipboardReader.MatchesExcludedApplication([exclusion], processName), Is.True);
+    }
 }

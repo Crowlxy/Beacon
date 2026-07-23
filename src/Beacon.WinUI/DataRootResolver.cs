@@ -75,14 +75,33 @@ internal static class R1Storage
         catch (Exception exception) when (exception is IOException or JsonException) { WriteLog($"WARN Settings read failed: {exception.Message}"); return defaultValue; }
     }
 
-    public static void SetBoolean(string name, bool value)
+    public static T Get<T>(string name, T defaultValue)
+    {
+        if (_dataRoot is null) return defaultValue;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(SettingsPath));
+            return document.RootElement.TryGetProperty(name, out var value)
+                ? value.Deserialize<T>() ?? defaultValue
+                : defaultValue;
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or NotSupportedException)
+        {
+            WriteLog($"WARN Settings read failed: {exception.Message}");
+            return defaultValue;
+        }
+    }
+
+    public static void SetBoolean(string name, bool value) => Set(name, value);
+
+    public static void Set<T>(string name, T value)
     {
         if (_dataRoot is null) return;
-        var path = Path.Combine(_dataRoot, "Settings", "r1-settings.json");
+        var path = SettingsPath;
         try
         {
             var root = JsonNode.Parse(File.ReadAllText(path))?.AsObject() ?? [];
-            root[name] = value;
+            root[name] = JsonSerializer.SerializeToNode(value);
             var temporary = path + ".tmp";
             File.WriteAllText(temporary, root.ToJsonString(), new UTF8Encoding(false));
             File.Move(temporary, path, true);
@@ -92,6 +111,8 @@ internal static class R1Storage
             WriteLog($"WARN Settings write failed: {exception.Message}");
         }
     }
+
+    public static string SettingsPath => Path.Combine(_dataRoot ?? throw new InvalidOperationException("Storage is not initialized."), "Settings", "r1-settings.json");
 
     internal static void RotateLogs(string dataRoot, int retentionCount)
     {
