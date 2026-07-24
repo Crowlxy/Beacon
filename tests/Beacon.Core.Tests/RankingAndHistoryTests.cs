@@ -15,16 +15,55 @@ public sealed class RankingAndHistoryTests
 
         var score = RankingEngine.Score(result, "Beacon", usage, 10, new(now, "explorer", @"C:\Work"));
 
-        Assert.That(score, Is.EqualTo(600 + 120 + 180 + 80 + 80));
+        Assert.That(score, Is.EqualTo(
+            FuzzyMatcher.Match("Beacon", "Beacon").Score +
+            RankingEngine.RecentDayBoost +
+            RankingEngine.MaximumSelectionBoost +
+            RankingEngine.ContextBoost * 2));
     }
 
     [Test]
-    public void RankingUsesPrefixTitleAndSevenDayBands()
+    public void RankingUsesRawQualityAndSevenDayHistoryBand()
     {
         var now = DateTimeOffset.UtcNow;
         var usage = new UsageHistoryEntry("id", 1, now.AddDays(-2), null, "Search");
-        Assert.That(RankingEngine.Score(Result("Beacon Launcher"), "Beacon", usage, 2, new(now)), Is.EqualTo(300 + 60 + 90));
-        Assert.That(RankingEngine.Score(Result("Open Beacon Launcher"), "Beacon", null, 0, new(now)), Is.EqualTo(150));
+        var prefix = RankingEngine.Score(Result("Beacon Launcher"), "Beacon", usage, 2, new(now));
+        var partial = RankingEngine.Score(Result("Open Beacon Launcher"), "Beacon", null, 0, new(now));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(prefix, Is.EqualTo(
+                FuzzyMatcher.Match("Beacon", "Beacon Launcher").Score +
+                RankingEngine.RecentWeekBoost +
+                RankingEngine.MaximumSelectionBoost / 2d));
+            Assert.That(prefix, Is.GreaterThan(partial));
+        });
+    }
+
+    [Test]
+    public void HistoryCanReorderCloseMatchesWithoutErasingMatchIntent()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var used = new UsageHistoryEntry("id", 10, now.AddHours(-1), null, "Search");
+        var historyBacked = RankingEngine.Score(Result("VideoStudio"), "vs", used, 10, new(now));
+        var unused = RankingEngine.Score(Result("Visual Studio Code"), "vs", null, 10, new(now));
+
+        Assert.That(historyBacked, Is.GreaterThan(unused));
+    }
+
+    [Test]
+    public void SubtitleAndPathMatchesUseLowerFieldWeights()
+    {
+        var context = new RankingContext(DateTimeOffset.UtcNow);
+        var title = RankingEngine.Score(Result("Beacon"), "Beacon", null, 0, context);
+        var subtitle = RankingEngine.Score(Result("Other", subtitle: "Beacon"), "Beacon", null, 0, context);
+        var path = RankingEngine.Score(Result("Other", path: @"C:\Beacon"), "Beacon", null, 0, context);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(title, Is.GreaterThan(subtitle));
+            Assert.That(subtitle, Is.GreaterThan(path));
+        });
     }
 
     [Test]
@@ -35,7 +74,7 @@ public sealed class RankingAndHistoryTests
         var web = RankingEngine.Score(Result("web", ResultKind.WebSearch, score: -250), "query", null, 0, context);
         Assert.Multiple(() =>
         {
-            Assert.That(web, Is.EqualTo(-250));
+            Assert.That(web, Is.EqualTo(-RankingEngine.WebSearchPenalty));
             Assert.That(web, Is.LessThan(local));
         });
     }
@@ -60,8 +99,19 @@ public sealed class RankingAndHistoryTests
         }
     }
 
-    private static SearchResultDto Result(string title, ResultKind kind = ResultKind.Application, string? path = null, double score = 0) => new()
+    private static SearchResultDto Result(
+        string title,
+        ResultKind kind = ResultKind.Application,
+        string? path = null,
+        double score = 0,
+        string? subtitle = null) => new()
     {
-        Id = "id", ProviderId = "provider", Title = title, Kind = kind, FilePath = path, Score = score,
+        Id = "id",
+        ProviderId = "provider",
+        Title = title,
+        Subtitle = subtitle,
+        Kind = kind,
+        FilePath = path,
+        Score = score,
     };
 }

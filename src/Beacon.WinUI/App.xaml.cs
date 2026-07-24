@@ -7,6 +7,7 @@ namespace Beacon.WinUI;
 public partial class App : Application, IDisposable
 {
     private MainWindow? _window;
+    private WelcomeWindow? _welcomeWindow;
     private bool _terminating;
 
     public App()
@@ -37,6 +38,7 @@ public partial class App : Application, IDisposable
             R1Storage.WriteLog("INFO Single-instance activation pipe listening");
             if (Environment.GetEnvironmentVariable("BEACON_SMOKE_SETTINGS") == "1") _window.ShowSettings();
             R1Storage.WriteLog($"PERF StartupToResidentMs={Stopwatch.GetElapsedTime(Program.StartedTimestamp).TotalMilliseconds:F1}");
+            _ = ShowWelcomeIfNeededAsync();
 
         }
         catch (DataRootResolutionException exception)
@@ -48,8 +50,28 @@ public partial class App : Application, IDisposable
                 NativeMethods.MessageBoxIconError);
             Exit();
         }
+        catch (Exception exception)
+        {
+            R1Storage.WriteLog($"ERROR Startup failure: {exception}");
+            _ = NativeMethods.MessageBoxW(
+                IntPtr.Zero,
+                $"Beaconの起動中に予期しないエラーが発生しました。\n{exception.Message}",
+                "Beacon startup error",
+                NativeMethods.MessageBoxIconError);
+            Exit();
+        }
     }
 
+    private async Task ShowWelcomeIfNeededAsync()
+    {
+        if (_window is null || R1Storage.GetBoolean("WelcomeShown", false)) return;
+        var availability = await Beacon.Platform.Windows.Everything.EverythingApi.GetAvailabilityAsync(CancellationToken.None);
+        if (R1Storage.GetBoolean("WelcomeShown", false)) return;
+        R1Storage.SetBoolean("WelcomeShown", true);
+        _welcomeWindow = new WelcomeWindow(availability.Available, _window.ShowLauncher);
+        _welcomeWindow.Activate();
+        R1Storage.WriteLog("INFO First-run welcome displayed");
+    }
     private static void RunLegacyMigration(string dataRoot)
     {
         if (Environment.GetEnvironmentVariable("BEACON_SKIP_LEGACY_MIGRATION") == "1") return;

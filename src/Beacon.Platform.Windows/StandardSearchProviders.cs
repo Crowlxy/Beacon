@@ -60,6 +60,8 @@ public sealed class WindowsSettingsProvider : ISearchProvider
 public sealed class BrowserBookmarkProvider : ISearchProvider
 {
     public const string Id = "windows.bookmarks";
+    /// <summary>ブラウザの実行ファイルを解決できなかったときだけ使うお気に入りグリフ。</summary>
+    private static readonly IconDescriptor FallbackIcon = new(IconSource.FluentGlyph, "\uE734");
     private readonly Lazy<Task<Bookmark[]>> _bookmarks = new(() => Task.Run(BookmarkLoader.Load));
     public string ProviderId => Id;
 
@@ -77,7 +79,7 @@ public sealed class BrowserBookmarkProvider : ISearchProvider
             {
                 Id = $"bookmark:{bookmark.Url}", ProviderId = Id, Title = bookmark.Title,
                 Subtitle = $"{bookmark.Source} · {bookmark.Url}", Kind = ResultKind.Url,
-                Icon = new(IconSource.FluentGlyph, "\uE734"), ExecutionToken = bookmark.Url,
+                Icon = BrowserIconService.ForBrowser(bookmark.Source) ?? FallbackIcon, ExecutionToken = bookmark.Url,
             };
         }
     }

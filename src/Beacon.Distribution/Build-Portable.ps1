@@ -31,7 +31,7 @@ foreach ($path in @($portableRoot, $hostStage, $zipPath)) {
 $winuiArguments = @(
     'publish', (Join-Path $repositoryRoot 'src\Beacon.WinUI\Beacon.WinUI.csproj'),
     '-c', $Configuration, '-r', $Runtime, '--self-contained', 'true',
-    '-p:WindowsAppSDKSelfContained=true', '-p:DebugType=None', '-o', $stage
+    '-p:WindowsAppSDKSelfContained=true', '-p:DebugType=None', '-m:1', '-o', $stage
 )
 & dotnet @winuiArguments
 if ($LASTEXITCODE -ne 0) { throw 'Beacon.WinUI publish failed.' }
@@ -39,7 +39,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Beacon.WinUI publish failed.' }
 $hostArguments = @(
     'publish', (Join-Path $repositoryRoot 'src\Beacon.PluginHost\Beacon.PluginHost.csproj'),
     '-c', $Configuration, '-r', $Runtime, '--self-contained', 'true',
-    '-p:DebugType=None', '-o', $hostStage
+    '-p:DebugType=None', '-m:1', '-o', $hostStage
 )
 & dotnet @hostArguments
 if ($LASTEXITCODE -ne 0) { throw 'Beacon.PluginHost publish failed.' }

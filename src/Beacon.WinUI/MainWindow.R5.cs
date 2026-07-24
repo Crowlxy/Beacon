@@ -23,6 +23,10 @@ public sealed partial class MainWindow
     private bool _systemActionConfirmed;
     private bool _clearClipboardPending;
     private CancellationTokenSource? _runningCancellation;
+    private readonly QuickKeyRegistry _quickKeys = CreateQuickKeyRegistry();
+    private Action? _statusRetry;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _statusAutoHideTimer;
+    private bool _everythingStatusShown;
 
     private bool HandleUxKey(KeyRoutedEventArgs args)
     {
@@ -148,25 +152,41 @@ public sealed partial class MainWindow
 
     private void OpenActions(SearchResultDto target)
     {
-        if (string.IsNullOrWhiteSpace(target.FilePath)) return;
+        var targetKind = ActionTargetClassifier.From(target);
+        if (targetKind == ActionTargetKind.None || string.IsNullOrWhiteSpace(ActionSource(target))) return;
+        var actions = BuiltInActions.For(targetKind);
         _actionTarget = target;
         _viewState.OpenContextActions();
-        ApplyResults(BuiltInActions.All.Select(ActionResult).ToArray());
-        ResizeForResults(BuiltInActions.All.Count);
+        var hintCount = R1Storage.Get("ContextActionHintCount", 0);
+        ScopeChipText.Text = $"{target.Title} › アクション" + (hintCount < 3 ? " · Escで戻る" : string.Empty);
+        ScopeChipClose.Visibility = Visibility.Collapsed;
+        ScopeChip.Visibility = Visibility.Visible;
+        if (hintCount < 3) R1Storage.Set("ContextActionHintCount", hintCount + 1);
+        ApplyResults(actions.Select(action => ActionResult(action, targetKind)).ToArray());
+        ResizeForResults(actions.Count);
         QueryPlaceholder.Text = "アクションを選択";
     }
 
-    private void SelectAction(string actionId)
+    private async void SelectAction(string actionId)
     {
         _selectedAction = BuiltInActions.All.FirstOrDefault(x => x.Id == actionId);
         if (_selectedAction is null || _actionTarget is null) return;
         if (_selectedAction.Parameters.Length > 0)
         {
-            _actionInputFlow = new ActionInputFlow(_selectedAction);
+            var selectedAction = _selectedAction;
+            _actionInputFlow = new ActionInputFlow(selectedAction);
             _viewState.BeginActionInput();
             QueryBox.Text = string.Empty;
             QueryPlaceholder.Text = _actionInputFlow.Current!.Title;
-            ShowStatus(_selectedAction.Title, "入力後にEnter");
+            ShowStatus(selectedAction.Title, "入力後にEnter");
+            if (_actionInputFlow.Current?.Kind == ActionParameterKind.FolderPath)
+            {
+                var pickedFolder = await PickFolderAsync();
+                if (!string.IsNullOrWhiteSpace(pickedFolder) &&
+                    _viewState.State == LauncherViewState.ActionInput &&
+                    ReferenceEquals(_selectedAction, selectedAction))
+                    QueryBox.Text = pickedFolder;
+            }
         }
         else if (_selectedAction.RequiresConfirmation) ShowActionConfirmation();
         else RunSelectedAction();
@@ -180,7 +200,8 @@ public sealed partial class MainWindow
 
     private async void RunSelectedAction()
     {
-        if (_selectedAction is null || _actionTarget?.FilePath is null || !_viewState.TryBeginRunning()) return;
+        var source = _actionTarget is null ? null : ActionSource(_actionTarget);
+        if (_selectedAction is null || string.IsNullOrWhiteSpace(source) || !_viewState.TryBeginRunning()) return;
         _runningCancellation?.Dispose();
         _runningCancellation = new CancellationTokenSource();
         var cancellationToken = _runningCancellation.Token;
@@ -191,13 +212,26 @@ public sealed partial class MainWindow
             result = await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return BuiltInActionService.Execute(_selectedAction.Id, _actionTarget.FilePath, _actionArgument, cancellationToken);
+                return BuiltInActionService.Execute(_selectedAction.Id, source, _actionArgument, _windowHandle, cancellationToken);
             }, cancellationToken).ConfigureAwait(true);
         }
-        catch (OperationCanceledException) { return; }
+        catch (OperationCanceledException)
+        {
+            ApplyResults([]);
+            SetLauncherStatus("操作をキャンセルしました。");
+            return;
+        }
         if (cancellationToken.IsCancellationRequested) return;
         if (result.Success) _usageHistory.Record($"action:{_selectedAction.Id}", _activeProcessName, "Action");
-        ShowStatus(_selectedAction.Title, result.Success ? "完了" : result.FailureReason ?? "失敗");
+        if (result.Success) ShowStatus(_selectedAction.Title, "完了");
+        else
+        {
+            R1Storage.WriteLog($"ERROR Action {_selectedAction.Id} failed: {result.FailureReason ?? "原因不明"}");
+            ApplyResults([]);
+            SetLauncherStatus(
+                $"実行できませんでした: {result.FailureReason ?? "原因不明"}",
+                retryAction: () => { _viewState.Back(false); RunSelectedAction(); });
+        }
     }
 
     private void EnterBrowse(BrowseCategory category)
@@ -266,6 +300,7 @@ public sealed partial class MainWindow
     {
         _queryScope = scope;
         ScopeChipText.Text = scope.Token;
+        ScopeChipClose.Visibility = Visibility.Visible;
         ScopeChip.Visibility = Visibility.Visible;
         QueryBox.Text = string.Empty;
         ResizeForResults(_results.Count);
@@ -279,11 +314,23 @@ public sealed partial class MainWindow
         StartSearch(QueryBox.Text);
     }
 
+    private void RestoreScopeChip()
+    {
+        if (_queryScope is null)
+        {
+            ScopeChip.Visibility = Visibility.Collapsed;
+            return;
+        }
+        ScopeChipText.Text = _queryScope.Value.Token;
+        ScopeChipClose.Visibility = Visibility.Visible;
+        ScopeChip.Visibility = Visibility.Visible;
+    }
     private void RestoreState()
     {
         if (_viewState.State == LauncherViewState.Search)
         {
             QueryPlaceholder.Text = "Anything...";
+            RestoreScopeChip();
             StartSearch(QueryBox.Text);
         }
         else if (_viewState.State == LauncherViewState.Browse && _viewState.BrowseCategory is { } category) DisplayBrowse(category);
@@ -310,20 +357,19 @@ public sealed partial class MainWindow
         Kind = ResultKind.Action, Icon = new(IconSource.FluentGlyph, "\uE946"),
     };
 
-    private static SearchResultDto ActionResult(ActionDescriptor action) => new()
+    private static SearchResultDto ActionResult(ActionDescriptor action, ActionTargetKind targetKind = ActionTargetKind.None) => new()
     {
-        Id = $"action:{action.Id}", ProviderId = ActionProviderId, Title = action.Title,
+        Id = $"action:{action.Id}", ProviderId = ActionProviderId,
+        Title = action.Id == "copy-path" && targetKind == ActionTargetKind.Url ? "URLをコピー" : action.Title,
         Subtitle = action.RequiresConfirmation ? "確認あり" : "内蔵アクション", Kind = ResultKind.Action,
         Icon = new(IconSource.FluentGlyph, action.Glyph), ExecutionToken = action.Id,
     };
 
-    private static bool TryQuickKey(string query, out string searchText, out ActionDescriptor action)
+    private bool TryQuickKey(string query, out string searchText, out ActionDescriptor action)
     {
         var parts = query.TrimEnd().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var values = R1Storage.Get("QuickKeys", new Dictionary<string, string>());
-        action = parts.Length > 1 && values.TryGetValue(parts[^1], out var actionId)
-            ? BuiltInActions.All.FirstOrDefault(x => x.Id == actionId)!
-            : null!;
+        _quickKeys.Load();
+        action = parts.Length > 1 ? _quickKeys.FindAction(parts[^1])! : null!;
         searchText = action is null ? query : string.Join(' ', parts[..^1]);
         return action is not null;
     }
@@ -331,6 +377,99 @@ public sealed partial class MainWindow
     private void UpdateGhostCompletion(string query)
     {
         var last = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? string.Empty;
-        GhostCompletion.Text = last.Length == 0 ? string.Empty : R1Storage.Get("QuickKeys", new Dictionary<string, string>()).Keys.FirstOrDefault(x => x.StartsWith(last, StringComparison.OrdinalIgnoreCase) && x.Length > last.Length) ?? string.Empty;
+        var mappings = _quickKeys.Load();
+        GhostCompletion.Text = last.Length == 0
+            ? string.Empty
+            : mappings.Keys.FirstOrDefault(key =>
+                key.StartsWith(last, StringComparison.OrdinalIgnoreCase) && key.Length > last.Length) ?? string.Empty;
     }
+
+    private void OnResultSelectionChanged(object sender, SelectionChangedEventArgs args) => UpdateQuickKeyBadges();
+
+    private void UpdateQuickKeyBadges()
+    {
+        _quickKeys.Load();
+        foreach (var row in _results)
+        {
+            var actionId = row.Result.Kind switch
+            {
+                ResultKind.Folder => "terminal",
+                ResultKind.Application or ResultKind.File => "reveal",
+                ResultKind.Url or ResultKind.WebSearch => "copy-path",
+                _ => null,
+            };
+            row.SetQuickKey(ReferenceEquals(row, ResultsList.SelectedItem) && actionId is not null
+                ? _quickKeys.FindKey(actionId)
+                : null);
+        }
+    }
+
+    private void SetLauncherStatus(string message, bool retry = false, bool resize = true, Action? retryAction = null)
+    {
+        _statusAutoHideTimer?.Stop();
+        _statusRetry = retryAction ?? (retry ? () => StartSearch(QueryBox.Text) : null);
+        StatusText.Text = message;
+        StatusRetryButton.Visibility = _statusRetry is null ? Visibility.Collapsed : Visibility.Visible;
+        StatusRow.Visibility = Visibility.Visible;
+        if (resize) ResizeForResults(_results.Count);
+    }
+
+    private void ClearLauncherStatus(bool resize = true)
+    {
+        _statusAutoHideTimer?.Stop();
+        if (StatusRow.Visibility == Visibility.Collapsed) return;
+        _statusRetry = null;
+        StatusRetryButton.Visibility = Visibility.Collapsed;
+        StatusRow.Visibility = Visibility.Collapsed;
+        if (resize) ResizeForResults(_results.Count);
+    }
+
+    private void ShowEverythingUnavailableStatus(bool force = false)
+    {
+        if (_everythingStatusShown && !force)
+        {
+            ClearLauncherStatus();
+            return;
+        }
+        _everythingStatusShown = true;
+        ShowTransientLauncherStatus(
+            "Everythingは未接続です。Windows Indexで検索しています。",
+            () => _ = RefreshEverythingAvailabilityAsync(true));
+    }
+
+    private void ShowTransientLauncherStatus(string message, Action? retryAction = null)
+    {
+        SetLauncherStatus(message, retryAction: retryAction);
+        _statusAutoHideTimer ??= DispatcherQueue.CreateTimer();
+        _statusAutoHideTimer.IsRepeating = false;
+        _statusAutoHideTimer.Interval = TimeSpan.FromMilliseconds(Token("TransientStatusDurationMilliseconds"));
+        _statusAutoHideTimer.Tick -= OnStatusAutoHideTimerTick;
+        _statusAutoHideTimer.Tick += OnStatusAutoHideTimerTick;
+        _statusAutoHideTimer.Start();
+    }
+    private void OnStatusAutoHideTimerTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args) =>
+        ClearLauncherStatus();
+    private void OnStatusRetry(object sender, RoutedEventArgs args) => _statusRetry?.Invoke();
+    private async Task<string?> PickFolderAsync()
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FolderPicker();
+            picker.FileTypeFilter.Add("*");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, _windowHandle);
+            return (await picker.PickSingleFolderAsync())?.Path;
+        }
+        catch (Exception exception)
+        {
+            R1Storage.WriteLog($"WARN Folder picker failed; using text fallback: {exception.Message}");
+            return null;
+        }
+    }
+
+    private static string? ActionSource(SearchResultDto target) =>
+        target.FilePath ?? target.CopyText ?? target.ExecutionToken;
+
+    private static QuickKeyRegistry CreateQuickKeyRegistry() => new(
+        () => R1Storage.Get<Dictionary<string, string>?>("QuickKeys", null),
+        mappings => R1Storage.Set("QuickKeys", new Dictionary<string, string>(mappings, StringComparer.OrdinalIgnoreCase)));
 }

@@ -23,6 +23,9 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly BrowserBookmarkProvider _bookmarkProvider;
     private bool _exiting;
     private SettingsWindow? _settingsWindow;
+    private bool? _everythingAvailable;
+    private string _appliedAppearance = "System";
+    private string _pendingAppearance = "System";
 
     public MainWindow(string dataRoot)
     {
@@ -37,7 +40,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 _appSearchProvider,
                 _fileSearchProvider,
                 new CalculatorSearchProvider(),
-                new UrlSearchProvider(),
+                new UrlSearchProvider(BrowserIconService.ForDefaultBrowser()),
                 new WebSearchProvider(),
                 new WindowsSettingsProvider(),
                 _bookmarkProvider,
@@ -49,6 +52,9 @@ public sealed partial class MainWindow : Window, IDisposable
             log: R1Storage.WriteLog);
         R1Storage.WriteLog("INFO MainWindow initialization started");
         InitializeComponent();
+        _appliedAppearance = R1Storage.Get("Appearance", "System");
+        _pendingAppearance = _appliedAppearance;
+        ApplyElementTheme(_appliedAppearance);
         ConfigureBackdrop();
         R1Storage.WriteLog("INFO MainWindow XAML initialized");
         var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -76,9 +82,9 @@ public sealed partial class MainWindow : Window, IDisposable
             _clipboardHistory.OnClipboardUpdate);
         InitializeLauncher(windowHandle);
         _ = RefreshAppCacheAsync();
+        _ = RefreshEverythingAvailabilityAsync();
         _bookmarkProvider.Preload();
         R1Storage.WriteLog("INFO Hotkey and tray registered");
-        _ = ShowEverythingNoticeOnceAsync();
     }
 
     internal void ShowSettings()
@@ -96,7 +102,8 @@ public sealed partial class MainWindow : Window, IDisposable
                     TogglePersonalization,
                     ResetPersonalizationCore,
                     _clipboardHistory.Clear,
-                    ApplyClipboardExclusions);
+                    ApplyClipboardExclusions,
+                    ApplyAppearance);
                 _settingsWindow.Activate();
                 R1Storage.WriteLog("INFO Settings window opened");
             }
@@ -109,15 +116,38 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void ApplyClipboardExclusions(string[] values) => _clipboardHistory.ExcludedApplications = values;
 
-    private async Task ShowEverythingNoticeOnceAsync()
+    private async Task RefreshEverythingAvailabilityAsync(bool showStatus = false)
     {
-        if (R1Storage.GetBoolean("EverythingNoticeShown", false)) return;
         var availability = await Beacon.Platform.Windows.Everything.EverythingApi.GetAvailabilityAsync(CancellationToken.None);
-        if (availability.Available) return;
-        R1Storage.SetBoolean("EverythingNoticeShown", true);
-        DispatcherQueue.TryEnqueue(() => _ = NativeMethods.MessageBoxW(_windowHandle, "Everythingを起動すると、ファイル検索が高速になります。Windows Indexでも検索できます。", "Beacon", 0));
+        _everythingAvailable = availability.Available;
+        if (showStatus)
+        {
+            if (availability.Available) ShowTransientLauncherStatus("Everythingに接続しました。");
+            else ShowEverythingUnavailableStatus(force: true);
+        }
+    }
+    internal void ApplyAppearance(string appearance)
+    {
+        _pendingAppearance = appearance;
     }
 
+    private void ApplyPendingAppearance()
+    {
+        if (string.Equals(_appliedAppearance, _pendingAppearance, StringComparison.Ordinal)) return;
+        ApplyElementTheme(_pendingAppearance);
+        _appliedAppearance = _pendingAppearance;
+        R1Storage.WriteLog($"INFO Appearance applied={_appliedAppearance}");
+    }
+    private void ApplyElementTheme(string appearance)
+    {
+        if (Content is not FrameworkElement root) return;
+        root.RequestedTheme = appearance switch
+        {
+            "Light" => ElementTheme.Light,
+            "Dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+    }
     private void ConfigureBackdrop()
     {
         if (DesktopAcrylicController.IsSupported())
@@ -125,28 +155,19 @@ public sealed partial class MainWindow : Window, IDisposable
             try
             {
                 SystemBackdrop = new ThinDesktopAcrylicBackdrop();
-                R1Storage.WriteLog("INFO Backdrop path: thin desktop acrylic");
+                R1Storage.WriteLog("INFO Backdrop path: managed thin desktop acrylic");
                 return;
             }
             catch (Exception exception)
             {
-                R1Storage.WriteLog($"WARN Thin desktop acrylic unavailable: {exception.Message}");
+                R1Storage.WriteLog($"WARN Managed thin desktop acrylic unavailable: {exception.Message}");
             }
         }
 
-        try
-        {
-            SystemBackdrop = new DesktopAcrylicBackdrop();
-            R1Storage.WriteLog("INFO Backdrop path: standard desktop acrylic fallback");
-        }
-        catch (Exception exception)
-        {
-            SystemBackdrop = null;
-            Panel.Background = (Brush)Application.Current.Resources["LauncherFallbackBrush"];
-            R1Storage.WriteLog($"WARN Backdrop path: solid fallback; desktop acrylic unavailable: {exception.Message}");
-        }
+        SystemBackdrop = null;
+        Panel.Background = (Brush)Application.Current.Resources["LauncherFallbackBrush"];
+        R1Storage.WriteLog("WARN Backdrop path: solid fallback");
     }
-
     public void ShowLauncher()
     {
         DispatcherQueue.TryEnqueue(ShowLauncherCore);
@@ -270,13 +291,14 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         _runningCancellation?.Cancel();
         _runningCancellation?.Dispose();
+        _settingsWindow?.Dispose();
+        SystemBackdrop = null;
         _orchestrator.Dispose();
         _clipboardHistory.Dispose();
         _fileSearchProvider.Dispose();
         _appSearchProvider.Dispose();
         _nativeWindow.Dispose();
     }
-
     private sealed class SearchResultReceiver(CancellationTokenSource cancellation)
     {
         private int _count;

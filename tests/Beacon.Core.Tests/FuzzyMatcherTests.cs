@@ -21,6 +21,32 @@ public sealed class FuzzyMatcherTests
     }
 
     [Test]
+    public void MatchQualitySeparatesAllMatchKinds()
+    {
+        var exact = FuzzyMatcher.Match("beacon", "beacon").Score;
+        var prefix = FuzzyMatcher.Match("beacon", "Beacon Launcher").Score;
+        var wordInitial = FuzzyMatcher.Match("vs", "Visual Studio Code").Score;
+        var contiguous = FuzzyMatcher.Match("studio", "Visual Studio Code").Score;
+        var acronym = FuzzyMatcher.Match("vs", "VideoStudio").Score;
+        var nonContiguous = FuzzyMatcher.Match("bcn", "Beacon").Score;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exact, Is.GreaterThan(prefix));
+            Assert.That(prefix, Is.GreaterThan(wordInitial));
+            Assert.That(wordInitial, Is.GreaterThan(contiguous));
+            Assert.That(contiguous, Is.GreaterThan(acronym));
+            Assert.That(acronym, Is.GreaterThan(nonContiguous));
+        });
+    }
+
+    [Test]
+    public void VisualStudioCodeOutranksCamelCaseVideoStudioForVs() =>
+        Assert.That(
+            FuzzyMatcher.Match("vs", "Visual Studio Code").Score,
+            Is.GreaterThan(FuzzyMatcher.Match("vs", "VideoStudio").Score));
+
+    [Test]
     public void MatchRejectsBelowThreshold() =>
         Assert.That(FuzzyMatcher.Match("az", "a very very long candidate ending with z").Success, Is.False);
 }

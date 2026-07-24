@@ -25,6 +25,7 @@
                 <RowDefinition Height="{StaticResource SearchBarGridHeight}" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid Padding="{StaticResource SearchPadding}">
                 <Grid.ColumnDefinitions>
@@ -75,11 +76,11 @@
                 Margin="{StaticResource CategoryChipRowMargin}"
                 Padding="{StaticResource CategoryChipPadding}"
                 CornerRadius="{StaticResource CategoryChipCornerRadius}"
-                Background="{StaticResource CategoryChipBrush}"
+                Background="{ThemeResource CategoryChipBrush}"
                 Visibility="Collapsed">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="ScopeChipText" FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource CategoryChipFontSize}" VerticalAlignment="Center" />
-                    <Button Content="×" Click="OnScopeChipClose" Background="{StaticResource TransparentBrush}" BorderThickness="{StaticResource QueryBoxBorderThickness}" Padding="{StaticResource QueryBoxPadding}" />
+                    <Button x:Name="ScopeChipClose" Content="×" Click="OnScopeChipClose" Background="{StaticResource TransparentBrush}" BorderThickness="{StaticResource QueryBoxBorderThickness}" Padding="{StaticResource QueryBoxPadding}" />
                 </StackPanel>
             </Border>
             <ListView
@@ -88,6 +89,7 @@
                 Margin="{StaticResource ResultsMargin}"
                 IsItemClickEnabled="True"
                 ItemClick="OnResultClicked"
+                SelectionChanged="OnResultSelectionChanged"
                 SelectionMode="Single">
                 <ListView.ItemContainerTransitions>
                     <TransitionCollection />
@@ -119,13 +121,54 @@
                                 <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultTitleSize}" Foreground="{ThemeResource LauncherResultTitleBrush}" local:HighlightedText.Text="{Binding Result.Title}" local:HighlightedText.Query="{Binding MatchQuery}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock FontFamily="{StaticResource LauncherFontFamily}" FontSize="{StaticResource ResultSubtitleSize}" Margin="{StaticResource ResultSubtitleMargin}" Foreground="{ThemeResource LauncherSecondaryTextBrush}" Text="{Binding Result.Subtitle}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
-                            <Border Grid.Column="2" Background="{StaticResource QuickKeyBrush}" CornerRadius="{StaticResource CategoryChipCornerRadius}" Padding="{StaticResource QuickKeyPadding}" Margin="{StaticResource QuickKeyMargin}" VerticalAlignment="Center" Visibility="{Binding QuickKeyVisibility}">
+                            <Border Grid.Column="2" Background="{ThemeResource QuickKeyBrush}" CornerRadius="{StaticResource CategoryChipCornerRadius}" Padding="{StaticResource QuickKeyPadding}" Margin="{StaticResource QuickKeyMargin}" VerticalAlignment="Center" Visibility="{Binding QuickKeyVisibility}">
                                 <TextBlock FontFamily="{StaticResource QuickKeyFontFamily}" FontSize="{StaticResource CategoryChipFontSize}" Foreground="{ThemeResource LauncherWeakTextBrush}" Text="{Binding QuickKey}" />
                             </Border>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+            <Border
+                x:Name="StatusRow"
+                Grid.Row="3"
+                MinHeight="{StaticResource StatusRowMinHeight}"
+                Margin="{StaticResource StatusRowMargin}"
+                Padding="{StaticResource StatusRowPadding}"
+                CornerRadius="{StaticResource ResultSelectionCornerRadius}"
+                Background="{ThemeResource StatusRowBrush}"
+                Visibility="Collapsed"
+                AutomationProperties.LiveSetting="Polite">
+                <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        x:Name="StatusIcon"
+                        Glyph="&#xE946;"
+                        FontFamily="Segoe Fluent Icons"
+                        FontSize="{StaticResource ResultGlyphSize}"
+                        Foreground="{ThemeResource LauncherSecondaryTextBrush}"
+                        Margin="{StaticResource StatusRowIconMargin}"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        x:Name="StatusText"
+                        Grid.Column="1"
+                        FontFamily="{StaticResource LauncherFontFamily}"
+                        FontSize="{StaticResource ResultSubtitleSize}"
+                        Foreground="{ThemeResource LauncherTextBrush}"
+                        TextWrapping="Wrap"
+                        VerticalAlignment="Center" />
+                    <Button
+                        x:Name="StatusRetryButton"
+                        Grid.Column="2"
+                        Content="再試行"
+                        Click="OnStatusRetry"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center" />
+                </Grid>
+            </Border>
         </Grid>
     </Border>
 </Window>

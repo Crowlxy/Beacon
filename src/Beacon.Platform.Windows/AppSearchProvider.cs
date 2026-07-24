@@ -27,7 +27,12 @@ public sealed class AppSearchProvider : ISearchProvider, IDisposable
         SearchResultDto[] matches;
         lock (_cacheGate)
             matches = _cache.Values
-                .Where(item => FuzzyMatcher.Match(request.RawQuery, item.Title).Success)
+                .Select(item => (Item: item, Score: BestApplicationMatchScore(request.RawQuery, item)))
+                .Where(match => match.Score > 0)
+                .Select(match => match.Item with
+                {
+                    Score = match.Item.Score + Math.Max(0, match.Score - RankingEngine.BestTextMatchScore(match.Item, request.RawQuery)),
+                })
                 .ToArray();
         foreach (var item in matches)
         {
@@ -36,6 +41,17 @@ public sealed class AppSearchProvider : ISearchProvider, IDisposable
         }
     }
 
+    internal static double BestApplicationMatchScore(string query, SearchResultDto item)
+    {
+        var scores = new List<double> { FuzzyMatcher.Match(query, item.Title).Score };
+        if (string.Equals(Path.GetExtension(item.FilePath), ".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            scores.Add(FuzzyMatcher.Match(query, Path.GetFileNameWithoutExtension(item.FilePath) ?? string.Empty).Score);
+            if (!string.IsNullOrWhiteSpace(item.Subtitle))
+                scores.Add(FuzzyMatcher.Match(query, Path.GetFileNameWithoutExtension(item.Subtitle) ?? string.Empty).Score);
+        }
+        return scores.Max();
+    }
     public Task RefreshIfWatcherUnavailableAsync() =>
         _initialized && _watchersHealthy ? Task.CompletedTask : EnsureCacheAsync(true, CancellationToken.None);
 

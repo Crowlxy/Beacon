@@ -28,12 +28,18 @@ public sealed class CalculatorSearchProvider : ISearchProvider
 
     private sealed class ExpressionParser(string text)
     {
+        // 再帰下降パーサは括弧ネスト・単項符号・^連鎖で無制限に再帰し、病的入力で StackOverflowException を
+        // 起こす。.NET の StackOverflowException は try/catch で捕捉できず常駐プロセスごと即死するため、
+        // 入力長と再帰深さの両方で先回りして FormatException 経由の「評価不能（false）」に落とす。
+        private const int MaxLength = 256;
+        private const int MaxDepth = 128;
         private int _position;
+        private int _depth;
 
         public static bool TryEvaluate(string text, out double value)
         {
             value = 0;
-            if (string.IsNullOrWhiteSpace(text) || !text.Any(char.IsDigit)) return false;
+            if (string.IsNullOrWhiteSpace(text) || text.Length > MaxLength || !text.Any(char.IsDigit)) return false;
             try
             {
                 var parser = new ExpressionParser(text);
@@ -43,6 +49,7 @@ public sealed class CalculatorSearchProvider : ISearchProvider
             }
             catch (FormatException) { return false; }
             catch (DivideByZeroException) { return false; }
+            catch (OverflowException) { return false; }
         }
 
         private double Expression()
@@ -89,21 +96,29 @@ public sealed class CalculatorSearchProvider : ISearchProvider
 
         private double Factor()
         {
-            Space();
-            if (Take('+')) return Factor();
-            if (Take('-')) return -Factor();
-            if (Take('('))
+            // 括弧ネスト・単項符号・^連鎖のいずれの再帰も必ず Factor を1レベルにつき1回通るため、
+            // ここで深さを数えれば全経路の再帰深さを一点で抑えられる。上限超過は FormatException にして
+            // 既存の「評価不能（false）」経路へ乗せる。
+            if (++_depth > MaxDepth) throw new FormatException();
+            try
             {
-                var value = Expression();
                 Space();
-                if (!Take(')')) throw new FormatException();
-                return Percentage(value);
+                if (Take('+')) return Factor();
+                if (Take('-')) return -Factor();
+                if (Take('('))
+                {
+                    var value = Expression();
+                    Space();
+                    if (!Take(')')) throw new FormatException();
+                    return Percentage(value);
+                }
+                var start = _position;
+                while (_position < text.Length && (char.IsDigit(text[_position]) || text[_position] == '.')) _position++;
+                if (!double.TryParse(text[start.._position], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number))
+                    throw new FormatException();
+                return Percentage(number);
             }
-            var start = _position;
-            while (_position < text.Length && (char.IsDigit(text[_position]) || text[_position] == '.')) _position++;
-            if (!double.TryParse(text[start.._position], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number))
-                throw new FormatException();
-            return Percentage(number);
+            finally { _depth--; }
         }
 
         private double Percentage(double value)
@@ -128,9 +143,15 @@ public sealed class CalculatorSearchProvider : ISearchProvider
     }
 }
 
-public sealed class UrlSearchProvider : ISearchProvider
+/// <summary>
+/// 入力がURLとして解釈できるときに「ブラウザで開く」結果を出す。
+/// アイコンは実際に開くブラウザのものを使いたいため、プラットフォーム層から差し込めるようにしている。
+/// </summary>
+public sealed class UrlSearchProvider(IconDescriptor? browserIcon = null) : ISearchProvider
 {
     public const string Id = "builtin.url";
+    private static readonly IconDescriptor FallbackIcon = new(IconSource.FluentGlyph, "\uE774");
+    private readonly IconDescriptor _icon = browserIcon ?? FallbackIcon;
     public string ProviderId => Id;
 
     public async IAsyncEnumerable<SearchResultDto> SearchAsync(SearchRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -141,7 +162,7 @@ public sealed class UrlSearchProvider : ISearchProvider
         {
             Id = $"url:{uri.AbsoluteUri}", ProviderId = Id, Title = uri.AbsoluteUri,
             Subtitle = "Open in browser", Kind = ResultKind.Url, Score = 100,
-            Icon = new(IconSource.FluentGlyph, "\uE774"), ExecutionToken = uri.AbsoluteUri,
+            Icon = _icon, ExecutionToken = uri.AbsoluteUri,
         };
         await Task.CompletedTask;
     }

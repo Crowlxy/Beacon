@@ -18,8 +18,33 @@ public sealed class BuiltInSearchProviderTests
     [TestCase("hello")]
     [TestCase("1+")]
     [TestCase("1/0")]
+    [TestCase("1.2.3")]
+    [TestCase("1...")]
+    [TestCase("...")]
     public async Task CalculatorIgnoresTextAndMalformedExpressions(string query) =>
         Assert.That(await Results(new CalculatorSearchProvider(), query), Is.Empty);
+
+    // 病的入力（深い括弧ネスト・^連鎖・連続する単項符号）は捕捉不能な StackOverflowException で
+    // 常駐プロセスごと落とし得た（LESSONS.md 2026-07-24）。入力長上限＋再帰深さガードで
+    // 「評価不能（結果なし）」に落ち、プロセスもテストランナーも生存することを固定する。
+    [Test]
+    public async Task CalculatorSurvivesPathologicalInput()
+    {
+        var provider = new CalculatorSearchProvider();
+        string[] pathological =
+        [
+            new string('(', 5000) + "1" + new string(')', 5000),
+            string.Join("^", Enumerable.Repeat("2", 5000)),
+            new string('-', 5000) + "1",
+        ];
+        foreach (var query in pathological)
+            Assert.That(await Results(provider, query), Is.Empty, $"query length {query.Length}");
+    }
+
+    // 上限内の正当な入れ子は引き続き評価できること（回帰防止）。
+    [Test]
+    public async Task CalculatorStillEvaluatesModestNesting() =>
+        Assert.That((await Results(new CalculatorSearchProvider(), "(((1+2)))*2")).Single().Title, Is.EqualTo("6"));
 
     [TestCase("https://example.com")]
     [TestCase("http://example.com/a")]

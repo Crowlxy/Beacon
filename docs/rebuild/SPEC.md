@@ -89,7 +89,9 @@ Beacon-old旧ルールからの継承・廃止:
 | 現在アプリ/フォルダとの関連 | 各+80 |
 | Web検索 | -250 |
 
-**Everything**: 稼働していればファイル検索をEverythingへ、なければWindows Indexへ。未起動エラーを検索結果に混ぜない（設定画面で一度だけ案内）。
+**2026-07-23改訂（Phase R9承認）**: 上表の一致スコア（+600/+300/+150）は**tier（底上げ値）**とし、`FuzzyMatcher` の一致品質スコア（rawScore）を加算して同tier内を順位付けする（`tier + rawScore`）。マッチ種別はタイトル完全一致 > 単語先頭一致 > 連続部分一致 > 頭字語 > 非連続一致、サブタイトル・パス一致はタイトル一致より低いベース。使用履歴ブースト等との合成規則を含む詳細は [R9_UX.md](R9_UX.md) §S2 が正。
+
+**Everything**: 稼働していればファイル検索をEverythingへ、なければWindows Indexへ。未起動エラーを検索結果に混ぜない（R9以降: 設定画面の状態表示＋StatusRow。[R9_UX.md](R9_UX.md) §S6/S7）。
 
 ## 5. 検索契約とプラグイン互換
 
@@ -162,6 +164,10 @@ LauncherViewState: Search / Browse / ContextActions / ActionInput / Confirmation
 ### 7.7 プレビューの新データ契約【対象外 2026-07-20】
 
 第三者プラグイン対応（旧R7 PluginHost）が実装対象外となったため、唯一の消費者を失う本契約も**定義しない**。将来プラグイン対応を再開する場合に、データのみのDTO（Title / Description / ImagePathOrUri / FilePath / Metadata）として設計する方針だけを残す。WPF `PreviewPanel`（Tier 4）非対応・プロセス境界越えのUI型禁止の原則は変わらない。
+
+### 7.8 UX完成度（Phase R9。2026-07-23ユーザー承認）
+
+段階表示（初回3件/16ms・差分更新・計測3分離）/ Quick Keysの `QuickKeyRegistry` 一本化（§7.4の既定値の正はCore側定義）/ アクションの `AppliesTo` フィルタと `open-with` の実装分離 / 初回起動Welcome / StatusRow（検索・実行エラーの可視化）/ 設定画面追補。仕様・受入条件は **[R9_UX.md](R9_UX.md) が正**。
 
 ## 8. ライセンス方針
 

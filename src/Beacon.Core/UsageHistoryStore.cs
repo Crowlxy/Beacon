@@ -68,10 +68,13 @@ public sealed class UsageHistoryStore
         try
         {
             return File.Exists(path)
-                ? (JsonSerializer.Deserialize<UsageHistoryEntry[]>(File.ReadAllText(path)) ?? []).ToDictionary(x => x.ResultId)
+                ? (JsonSerializer.Deserialize<UsageHistoryEntry[]>(File.ReadAllText(path)) ?? [])
+                    .Where(x => !string.IsNullOrEmpty(x?.ResultId))
+                    .GroupBy(x => x.ResultId)
+                    .ToDictionary(g => g.Key, g => g.Last())
                 : [];
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
         {
             log?.Invoke($"WARN Usage history read failed: {exception.Message}");
             return [];

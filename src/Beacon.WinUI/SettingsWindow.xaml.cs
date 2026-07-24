@@ -1,7 +1,11 @@
+using System.Diagnostics;
 using System.Reflection;
 using Beacon.Contracts;
 using Beacon.Core;
 using Beacon.Platform.Windows;
+using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Input;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -11,7 +15,7 @@ using Windows.System;
 
 namespace Beacon.WinUI;
 
-public sealed partial class SettingsWindow : Window
+public sealed partial class SettingsWindow : Window, IDisposable
 {
     public delegate bool ChangeHotkey(string value, out string error);
     private readonly Func<string, (bool Success, string Error)> _changeHotkey;
@@ -22,7 +26,11 @@ public sealed partial class SettingsWindow : Window
     private readonly Action _resetPersonalization;
     private readonly Action _clearClipboard;
     private readonly Action<string[]> _applyClipboardExclusions;
+    private readonly Action<string> _applyAppearance;
     private bool _loading = true;
+    private readonly QuickKeyRegistry _quickKeys = new(
+        () => R1Storage.Get<Dictionary<string, string>?>("QuickKeys", null),
+        mappings => R1Storage.Set("QuickKeys", new Dictionary<string, string>(mappings, StringComparer.OrdinalIgnoreCase)));
 
     public SettingsWindow(
         string dataRoot,
@@ -33,7 +41,8 @@ public sealed partial class SettingsWindow : Window
         Action togglePersonalization,
         Action resetPersonalization,
         Action clearClipboard,
-        Action<string[]> applyClipboardExclusions)
+        Action<string[]> applyClipboardExclusions,
+        Action<string> applyAppearance)
     {
         _changeHotkey = value =>
         {
@@ -47,27 +56,24 @@ public sealed partial class SettingsWindow : Window
         _resetPersonalization = resetPersonalization;
         _clearClipboard = clearClipboard;
         _applyClipboardExclusions = applyClipboardExclusions;
+        _applyAppearance = applyAppearance;
         InitializeComponent();
-        try { SystemBackdrop = new MicaBackdrop(); }
-        catch (Exception exception)
-        {
-            SettingsNavigation.Background = (Brush)Application.Current.Resources["LauncherFallbackBrush"];
-            R1Storage.WriteLog($"WARN Settings backdrop unavailable: {exception.Message}");
-        }
+        var appearance = R1Storage.Get("Appearance", "System");
+        AppearanceBox.SelectedValue = appearance;
+        ApplyAppearance(appearance);
+        ConfigureBackdrop();
+        ConfigureIntegratedTitleBar();
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "App.ico");
         if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
         AppWindow.Closing += (_, args) =>
         {
             args.Cancel = true;
-            SaveQuickKeys();
-            SaveExcludedApps();
-            AppWindow.Hide();
+            CloseToBackground();
         };
-        Activated += (_, _) => RefreshToggleState();
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(
-            (int)(double)Application.Current.Resources["SettingsWindowWidth"],
-            (int)(double)Application.Current.Resources["SettingsWindowHeight"]));
+        Activated += OnSettingsActivated;
+        ResizeForDpi();
         HotkeyBox.Text = R1Storage.Get("GlobalHotkey", "Alt+Shift+Space");
+        StartupToggle.IsOn = StartupRegistration.IsEnabled();
         LoadQuickKeys();
         ClipboardToggle.IsOn = _clipboardEnabled();
         PersonalizationToggle.IsOn = _personalizationEnabled();
@@ -78,11 +84,109 @@ public sealed partial class SettingsWindow : Window
         _loading = false;
     }
 
+    /// <summary>
+    /// ランチャーと同じThin Acrylicを使い、アプリ内で素材を1種類に揃える。
+    /// ナビ枠は素材そのまま、コンテンツ側はNavigationView標準のレイヤーが重なるので、
+    /// 同じ素材のまま透け具合だけが二段階になる。
+    /// 素材のTintOpacity/LuminosityOpacityは既定値のまま（useCustomTuning:false）とし、
+    /// 「もう少し濃く」はXAML側で AppSurfaceScrimBrush を薄く重ねて実現する。
+    /// 素材値を代入しないので、テーマ変更時の再導出はフレームワークに委ねられる（LESSONS.md 2026-07-24）。
+    /// </summary>
+    private void ConfigureBackdrop()
+    {
+        if (DesktopAcrylicController.IsSupported())
+        {
+            try
+            {
+                SystemBackdrop = new ThinDesktopAcrylicBackdrop(useCustomTuning: false);
+                R1Storage.WriteLog("INFO Settings backdrop path: thin desktop acrylic");
+                return;
+            }
+            catch (Exception exception)
+            {
+                R1Storage.WriteLog($"WARN Settings thin desktop acrylic unavailable: {exception.Message}");
+            }
+        }
+
+        SystemBackdrop = null;
+        SettingsRoot.Background = (Brush)Application.Current.Resources["LauncherFallbackBrush"];
+        R1Storage.WriteLog("WARN Settings backdrop path: solid fallback");
+    }
+
+    /// <summary>
+    /// Windows純正のキャプションバーを外し、UIに馴染む自前のタイトルバーへ差し替える。
+    /// ドラッグはInputNonClientPointerSourceのCaption領域で行い、閉じるボタン部分は領域から除外する。
+    /// </summary>
+    private void ConfigureIntegratedTitleBar()
+    {
+        ExtendsContentIntoTitleBar = true;
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
+            presenter.IsMaximizable = false;
+        }
+        SettingsTitleBarDragRegion.SizeChanged += (_, _) => UpdateTitleBarDragRegion();
+        UpdateTitleBarDragRegion();
+    }
+
+    private void UpdateTitleBarDragRegion()
+    {
+        var width = SettingsTitleBarDragRegion.ActualWidth;
+        var height = SettingsTitleBarDragRegion.ActualHeight;
+        if (width <= 0 || height <= 0) return;
+        var scale = SettingsTitleBarDragRegion.XamlRoot?.RasterizationScale ?? 1d;
+        try
+        {
+            InputNonClientPointerSource.GetForWindowId(AppWindow.Id).SetRegionRects(
+                NonClientRegionKind.Caption,
+                [new Windows.Graphics.RectInt32(0, 0, (int)Math.Round(width * scale), (int)Math.Round(height * scale))]);
+        }
+        catch (Exception exception)
+        {
+            R1Storage.WriteLog($"WARN Settings title bar drag region failed: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 非アクティブ時はAcrylicのサンプリングを止めて、背面が動いても設定画面がちらつかないようにする。
+    /// 再取得が要る状態の読み直しはアクティブになったときだけ行う。
+    /// </summary>
+    private void OnSettingsActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (SystemBackdrop is ThinDesktopAcrylicBackdrop acrylic)
+            acrylic.SetInputActive(args.WindowActivationState != WindowActivationState.Deactivated);
+        if (args.WindowActivationState == WindowActivationState.Deactivated) return;
+        RefreshToggleState();
+        _ = RefreshEverythingStatusAsync();
+    }
+
+    private void OnCloseSettings(object sender, RoutedEventArgs args) => CloseToBackground();
+
+    /// <summary>閉じる操作は常に保存してから隠す（ウィンドウは常駐アプリの一部として再利用する）。</summary>
+    private void CloseToBackground()
+    {
+        SaveQuickKeys();
+        SaveExcludedApps();
+        AppWindow.Hide();
+    }
+
+    private void ResizeForDpi()
+    {
+        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = NativeMethods.GetDpiForWindow(windowHandle);
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(
+            Pixels((double)Application.Current.Resources["SettingsWindowWidth"], dpi),
+            Pixels((double)Application.Current.Resources["SettingsWindowHeight"], dpi)));
+    }
+
+    private static int Pixels(double dip, uint dpi) => (int)Math.Round(dip * dpi / 96d);
+
     private void RefreshToggleState()
     {
         _loading = true;
         ClipboardToggle.IsOn = _clipboardEnabled();
         PersonalizationToggle.IsOn = _personalizationEnabled();
+        StartupToggle.IsOn = StartupRegistration.IsEnabled();
         _loading = false;
     }
 
@@ -136,7 +240,7 @@ public sealed partial class SettingsWindow : Window
         var wasLoading = _loading;
         _loading = true;
         QuickKeysRows.Children.Clear();
-        foreach (var value in R1Storage.Get("QuickKeys", DefaultQuickKeys())) AddQuickKeyRow(value.Key, value.Value);
+        foreach (var value in _quickKeys.Load()) AddQuickKeyRow(value.Key, value.Value);
         _loading = wasLoading;
     }
 
@@ -207,17 +311,92 @@ public sealed partial class SettingsWindow : Window
             }
         }
         SetInlineError(QuickKeysError, duplicated ? "重複するキーは保存されません。" : string.Empty);
-        R1Storage.Set("QuickKeys", values);
+        _quickKeys.Save(values);
     }
 
     private void OnResetQuickKeys(object sender, RoutedEventArgs args)
     {
-        R1Storage.Set("QuickKeys", DefaultQuickKeys());
+        _quickKeys.Save(QuickKeyRegistry.DefaultMappings);
         LoadQuickKeys();
         SetInlineError(QuickKeysError, string.Empty);
     }
 
-    private static Dictionary<string, string> DefaultQuickKeys() => new() { ["rf"] = "reveal", ["cp"] = "copy-path", ["rn"] = "rename", ["term"] = "terminal" };
+
+    private void OnStartupToggled(object sender, RoutedEventArgs args)
+    {
+        if (_loading) return;
+        try
+        {
+            StartupRegistration.SetEnabled(StartupToggle.IsOn, Environment.ProcessPath!);
+            R1Storage.WriteLog($"INFO Startup registration enabled={StartupToggle.IsOn}");
+        }
+        catch (Exception exception) { R1Storage.WriteLog($"ERROR Startup registration failed: {exception.Message}"); }
+    }
+
+    private void OnAppearanceChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (_loading || AppearanceBox.SelectedValue is not string appearance) return;
+        R1Storage.Set("Appearance", appearance);
+        ApplyAppearance(appearance);
+        _applyAppearance(appearance);
+    }
+
+    private void ApplyAppearance(string appearance)
+    {
+        SettingsRoot.RequestedTheme = appearance switch
+        {
+            "Light" => ElementTheme.Light,
+            "Dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+    }
+
+    private async Task RefreshEverythingStatusAsync()
+    {
+        EverythingStatusText.Text = "状態を確認しています…";
+        var availability = await Beacon.Platform.Windows.Everything.EverythingApi.GetAvailabilityAsync(CancellationToken.None);
+        EverythingStatusText.Text = availability.Available ? "接続済み" : "未接続 — Windows Indexで検索します";
+    }
+
+    private void OnRecheckEverything(object sender, RoutedEventArgs args) => _ = RefreshEverythingStatusAsync();
+
+    private async void OnPickExcludedExecutable(object sender, RoutedEventArgs args)
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.FileTypeFilter.Add(".exe");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            var file = await picker.PickSingleFileAsync();
+            if (file is null) return;
+            AddExcludedAppRow(file.Path);
+            SaveExcludedApps();
+        }
+        catch (Exception exception) { R1Storage.WriteLog($"ERROR Excluded application picker failed: {exception.Message}"); }
+    }
+
+    private async void OnPickRunningApp(object sender, RoutedEventArgs args)
+    {
+        var names = Process.GetProcesses()
+            .Select(process => { try { return process.ProcessName; } catch { return null; } })
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+        var picker = new ComboBox { ItemsSource = names, PlaceholderText = "起動中のアプリ" };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "除外するアプリを選択",
+            Content = picker,
+            PrimaryButtonText = "追加",
+            CloseButtonText = "キャンセル",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || picker.SelectedItem is not string selected) return;
+        AddExcludedAppRow(selected);
+        SaveExcludedApps();
+    }
     private void OnClipboardToggled(object sender, RoutedEventArgs args) { if (!_loading && ClipboardToggle.IsOn != _clipboardEnabled()) _toggleClipboard(); }
     private void OnPersonalizationToggled(object sender, RoutedEventArgs args) { if (!_loading && PersonalizationToggle.IsOn != _personalizationEnabled()) _togglePersonalization(); }
 
@@ -302,9 +481,15 @@ public sealed partial class SettingsWindow : Window
         AboutSection.Visibility = tag == "about" ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void OnResetEverythingNotice(object sender, RoutedEventArgs args) => R1Storage.SetBoolean("EverythingNoticeShown", false);
     private void OnOpenAttribution(object sender, RoutedEventArgs args) => OpenDistributionFile("attribution.md");
     private void OnOpenLicense(object sender, RoutedEventArgs args) => OpenDistributionFile("LICENSE");
+
+    public void Dispose()
+    {
+        SystemBackdrop = null;
+        GC.SuppressFinalize(this);
+    }
+
     private static void OpenDistributionFile(string name)
     {
         var path = Path.Combine(AppContext.BaseDirectory, name);

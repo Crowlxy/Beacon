@@ -2,8 +2,41 @@
     x:Class="Beacon.WinUI.SettingsWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Beacon.WinUI"
     Title="Beacon 設定">
-    <NavigationView
+    <Grid x:Name="SettingsRoot" Background="{ThemeResource AppSurfaceScrimBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="{StaticResource SettingsTitleBarHeight}" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <!--
+            タイトルバー行はウィンドウ全体のMica面をそのまま透過させ、独自の素材を重ねない。
+            ナビ／コンテンツ間の階層差は NavigationView.Resources の SettingsNavScrimBrush /
+            SettingsContentLayerBrush（DesignTokens.xaml集約）でのみ付ける。
+        -->
+        <Grid Grid.Row="0" Background="{StaticResource TransparentBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid x:Name="SettingsTitleBarDragRegion" Background="{StaticResource TransparentBrush}">
+                <TextBlock Text="Beacon 設定" Style="{StaticResource TitleBarCaptionStyle}" />
+            </Grid>
+            <Button
+                x:Name="SettingsCloseButton"
+                Grid.Column="1"
+                Style="{StaticResource TitleBarButtonStyle}"
+                ToolTipService.ToolTip="閉じる"
+                AutomationProperties.Name="閉じる"
+                Click="OnCloseSettings">
+                <FontIcon
+                    FontFamily="Segoe Fluent Icons"
+                    FontSize="{StaticResource TitleBarGlyphSize}"
+                    Glyph="&#xE8BB;" />
+            </Button>
+        </Grid>
+        <NavigationView
+            Grid.Row="1"
         x:Name="SettingsNavigation"
         PaneDisplayMode="Left"
         OpenPaneLength="{StaticResource SettingsNavPaneWidth}"
@@ -11,7 +44,30 @@
         IsPaneToggleButtonVisible="False"
         IsSettingsVisible="False"
         FontFamily="{StaticResource LauncherFontFamily}"
+        Background="{StaticResource TransparentBrush}"
         SelectionChanged="OnSettingsNavigationChanged">
+        <NavigationView.Resources>
+            <ResourceDictionary>
+                <ResourceDictionary.ThemeDictionaries>
+                    <ResourceDictionary x:Key="Light">
+                        <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="SettingsNavScrimBrush" />
+                        <StaticResource x:Key="NavigationViewContentBackground" ResourceKey="SettingsContentLayerBrush" />
+                    </ResourceDictionary>
+                    <ResourceDictionary x:Key="Dark">
+                        <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="SettingsNavScrimBrush" />
+                        <StaticResource x:Key="NavigationViewContentBackground" ResourceKey="SettingsContentLayerBrush" />
+                    </ResourceDictionary>
+                    <ResourceDictionary x:Key="Default">
+                        <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="SettingsNavScrimBrush" />
+                        <StaticResource x:Key="NavigationViewContentBackground" ResourceKey="SettingsContentLayerBrush" />
+                    </ResourceDictionary>
+                    <ResourceDictionary x:Key="HighContrast">
+                        <StaticResource x:Key="NavigationViewDefaultPaneBackground" ResourceKey="SettingsNavScrimBrush" />
+                        <StaticResource x:Key="NavigationViewContentBackground" ResourceKey="SettingsContentLayerBrush" />
+                    </ResourceDictionary>
+                </ResourceDictionary.ThemeDictionaries>
+            </ResourceDictionary>
+        </NavigationView.Resources>
         <NavigationView.MenuItems>
             <NavigationViewItem Content="一般" Tag="general" Icon="Setting" />
             <NavigationViewItem Content="検索" Tag="search" Icon="Find" />
@@ -48,6 +104,32 @@
                         </Grid>
                     </Border>
                     <TextBlock x:Name="HotkeyError" Style="{StaticResource SettingsErrorTextStyle}" Visibility="Collapsed" />
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE7E8;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Windows起動時に開始" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="サインイン後にBeaconを自動で起動します" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="StartupToggle" Grid.Column="2" OnContent="{x:Null}" OffContent="{x:Null}" VerticalAlignment="Center" Toggled="OnStartupToggled" />
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid ColumnSpacing="{StaticResource SettingsItemSpacing}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE790;" Style="{StaticResource SettingsRowIconStyle}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="外観" Style="{StaticResource SettingsLabelStyle}" />
+                                <TextBlock Text="システム設定に合わせるか、テーマを固定します" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <ComboBox x:Name="AppearanceBox" Grid.Column="2" SelectedValuePath="Tag" SelectionChanged="OnAppearanceChanged" VerticalAlignment="Center">
+                                <ComboBoxItem Content="System" Tag="System" />
+                                <ComboBoxItem Content="Light" Tag="Light" />
+                                <ComboBoxItem Content="Dark" Tag="Dark" />
+                            </ComboBox>
+                        </Grid>
+                    </Border>
                 </StackPanel>
 
                 <StackPanel x:Name="SearchSection" Spacing="{StaticResource SettingsCardSpacing}" Visibility="Collapsed">
@@ -61,9 +143,9 @@
                             <FontIcon Glyph="&#xE721;" Style="{StaticResource SettingsRowIconStyle}" />
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="Everything 連携" Style="{StaticResource SettingsLabelStyle}" />
-                                <TextBlock Text="Everythingが起動しているとファイル検索が高速になります（導入は任意）" Style="{StaticResource SettingsDescriptionStyle}" />
+                                <TextBlock x:Name="EverythingStatusText" Text="状態を確認しています…" Style="{StaticResource SettingsDescriptionStyle}" />
                             </StackPanel>
-                            <Button Grid.Column="2" Content="案内を再表示" VerticalAlignment="Center" Click="OnResetEverythingNotice" />
+                            <Button Grid.Column="2" Content="接続を再確認" VerticalAlignment="Center" Click="OnRecheckEverything" />
                         </Grid>
                     </Border>
                 </StackPanel>
@@ -142,7 +224,11 @@
                     <TextBlock Text="除外するアプリ" Style="{StaticResource SettingsGroupHeaderStyle}" />
                     <TextBlock Text="指定したプロセス名・実行ファイルからのコピーは記録しません。変更は即座に保存されます。" Style="{StaticResource SettingsDescriptionStyle}" Margin="{StaticResource SettingsErrorMargin}" />
                     <StackPanel x:Name="ExcludedAppsRows" Spacing="{StaticResource SettingsCardSpacing}" Margin="{StaticResource SettingsTitleMargin}" />
-                    <Button Content="アプリを追加" HorizontalAlignment="Left" Click="OnAddExcludedApp" />
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource SettingsItemSpacing}">
+                        <Button Content="手入力で追加" Click="OnAddExcludedApp" />
+                        <Button Content="起動中のアプリから選択" Click="OnPickRunningApp" />
+                        <Button Content="exeを選択" Click="OnPickExcludedExecutable" />
+                    </StackPanel>
                 </StackPanel>
 
                 <StackPanel x:Name="AboutSection" Spacing="{StaticResource SettingsItemSpacing}" Visibility="Collapsed" HorizontalAlignment="Center" Padding="{StaticResource SettingsPagePadding}">
@@ -157,5 +243,6 @@
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
-    </NavigationView>
+        </NavigationView>
+    </Grid>
 </Window>

@@ -27,7 +27,6 @@ internal static class R1Storage
                     ClipboardEnabled = false,
                     ClipboardExcludedApplications = Array.Empty<string>(),
                     PersonalizationEnabled = true,
-                    QuickKeys = new { rf = "reveal", cp = "copy-path", rn = "rename", term = "terminal" },
                 }),
                 new UTF8Encoding(false));
             File.Move(temporaryPath, settingsPath, true);

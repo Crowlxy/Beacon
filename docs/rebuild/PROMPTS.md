@@ -5,6 +5,8 @@
 
 **2026-07-23追記: R8実装後のユーザー確認で (a) 設定画面が開かない（Data\Logs に `XamlParseException: Cannot find a Resource with the Name/Key TabViewButtonBackground`。App.xaml に XamlControlsResources 未マージのため NavigationView が生成不能）、(b) Stage 2-2 の設定行スタイル（アイコン+ラベル+説明+右側コントロールの行カード）が未実装で素のコントロール羅列のまま、が確定。R8完了条件のうち「トレイ『設定』で新設定画面を開く」「Data\Logs に ERROR が無い」は未達。是正は下記 Phase R8.1。**
 
+**2026-07-23追記2: Phase R9（UX完成度）をユーザー承認。** 仕様・受入条件・コード裏取り済みの現状問題は [R9_UX.md](R9_UX.md) が正（あわせて SPEC §4改訂・§7.8追補、PLAN.md R8/R9追記済み）。**R8.1のユーザー目視確認が済み次第、現行フェーズ = Phase R9**（下記プロンプト）。
+
 
 ## Phase R8: 検索エンジン統一 + 設定画面リデザイン
 
@@ -291,4 +293,115 @@ Stageごとに変更・追加ファイル一覧と概要を報告する。コミ
 - 即時適用の操作感 / ContentDialog の確認が1回だけ出ること
 - Light/Dark・DPI 100〜200% で設定画面・ランチャー双方が破綻しないこと
 - XamlControlsResources 追加後のランチャー外観に退行がないこと（体感）
+```
+
+## Phase R9: UX完成度（段階表示・スコア実数化・Quick Keys一本化・状態可視化）
+
+前提: R8.1目視承認済み・作業ツリーに R8/R8.1 実装が存在。実装ブランチは `feature/rebuild-r9-ux`。仕様は `docs/rebuild/R9_UX.md` が正（本プロンプトと矛盾したら R9_UX.md を優先し、矛盾箇所を報告）。R8プロンプトの「読むべき文書」「禁止事項」「Git差分要約」を引き継ぐ。**Stage順に実装し、各Stage末でビルド・テストをグリーンへ戻して途中報告する。**
+
+```
+あなたはBeacon（WinUI 3 Portable-firstランチャー）のPhase R9を担当する。
+仕様は docs/rebuild/R9_UX.md（S1〜S7）が正。目的は「見た目の良いランチャー」を
+「Flow Launcherより良い検索体験」へ引き上げること。機能追加はR9_UX.md記載分のみ。
+
+## 読むべき文書（この順で）
+1. AGENTS.md（環境の既知制約）
+2. docs/rebuild/LESSONS.md
+3. docs/rebuild/R9_UX.md（本フェーズの正。「検証済みの現状問題」表の file:line が着手点）
+4. docs/rebuild/SPEC.md §3.3 / §4（2026-07-23改訂: tier+rawScore）/ §7（特に7.1・7.4・7.8）
+5. docs/rebuild/PLAN.md Phase R6（毎フレームHWND Resize禁止の経緯。**この方針を退行させない**）
+
+## Stage 1: 検索結果の段階表示 + 計測分離（R9_UX.md S1）
+1. MainWindow.R4.cs SearchAsync を改修: 全列挙完了後の一括 ScheduleResults をやめ、
+   (a) 初回=最初の3件到着 or 16ms経過の早い方で表示（HWND Resizeはこの1回）、
+   (b) 以降は表示上位の構成が変わったときだけ ListView差分更新（ApplyResults は既に差分適用
+       なので流用可）。HWND Resize は表示件数が変わったときのみ、
+   (c) 80〜120ms新着なしで Stable 扱い。
+   クエリ途中変更時の破棄（displayedQuery != QueryBox.Text）とキャンセルの既存挙動を維持。
+2. PERFログを3分離: InputToFirstCandidateMs（旧InputToFirstResultMsの改名。Channel到着）/
+   InputToFirstPaintMs（初回ApplyResults完了）/ InputToStableResultsMs（Stable確定）。
+   R6のしきい値検査（Test-Portable.ps1のログ検査）があれば新名称へ追随させる。
+3. テスト: 遅延プロバイダー（2sタイムアウト相当のFake）を混ぜても速いプロバイダーの結果が
+   先に確定することを Orchestrator/表示ロジックの単体で固定（UIテスト不要。ロジックを
+   Core側へ寄せられるなら ResultBatcher 等の純ロジックとして切り出してテストする）。
+
+## Stage 2: Fuzzyスコア実数化（R9_UX.md S2。SPEC §4改訂は承認済み）
+1. Beacon.Core/FuzzyMatcher.cs:35-38 の tier のみ返却をやめ、tier + rawScore を返す。
+   マッチ種別（タイトル完全一致 > 単語先頭一致 > 連続部分一致 > 頭字語 > 非連続一致）を
+   スコアで分離。サブタイトル・パス一致はタイトルより低いベースで合成。
+2. RankingEngine との合成規則を明文化（コード上の定数とコメント＋R9_UX.mdへの追記報告）:
+   tier加算が使用履歴ブースト（最大+180等）を常に打ち消さないこと。
+3. AppSearchProvider の一致対象へ実行ファイル名・ショートカット名を追加（タイトルに加え。
+   最良スコアを採用）。UWPパッケージ名・エイリアスは対象外（P1）。
+4. テスト更新: "vs" → Visual Studio Code が VideoStudio 等より上位になることを固定。
+   既存の FuzzyMatcher / RankingEngine テストを実スコア前提へ更新（完全>前方>部分の
+   相対順序・Web最下位・履歴ボーナスのテストは意味を保って残す）。
+
+## Stage 3: Quick Keys一本化 + アクションフィルタ（R9_UX.md S3・S4）
+1. Beacon.Core に QuickKeyRegistry を新設（DefaultMappings=BuiltInActionsのQuickKey定義を正 /
+   Load・Saveは保存が無ければDefaultMappingsを返す。空Dictionaryフォールバック禁止 /
+   FindAction(key) / FindKey(actionId)）。保存はこれまでどおり R1Storage "QuickKeys"
+   （SettingsWindowの既存保存形式と互換を保ち、移行不要にする）。
+2. 参照を一本化: MainWindow.R5.cs TryQuickKey（:323の空Dictionary既定を廃止）/
+   ゴースト補完（:334）/ SettingsWindow の DefaultQuickKeys()（:220を廃止しRegistry参照）/
+   結果バッジ（MainWindow.R4.cs:379 の固定 "term"/"rf" を廃止しRegistry逆引き）。
+   バッジは選択中の結果行にのみ表示する。
+3. ActionDescriptor へ AppliesTo（File/Folder/Application/Url のFlags）を追加し、
+   OpenActions（MainWindow.R5.cs:149-157）で対象種別により絞る（対応表はR9_UX.md S4）。
+4. open-with を「プログラムから開く」ダイアログへ変更（SHOpenWithDialog。API仕様は
+   Microsoft Learn一次情報で確認してから実装）。copy/move の宛先入力に FolderPicker を
+   第一導線として追加（unpackagedでは InitializeWithWindow が必要。既存の文字入力は
+   フォールバックとして残す）。
+5. テスト: QuickKeyRegistry（既定値・保存値・逆引き）/ AppliesToフィルタの対応表を固定。
+
+## Stage 4: 初回導線 + StatusRow + 設定追補（R9_UX.md S5・S6・S7）
+1. 初回起動時のみ Welcome ウィンドウ（アプリ名＋「Alt + Space でいつでも検索」＋
+   [試してみる]＋[Windows起動時に開始]トグル）。表示済みフラグはR1Storage。
+   常設ホーム画面は作らない。
+2. Everything未検出のネイティブMessageBox（MainWindow.xaml.cs:112-119）を廃止し、
+   初回=Welcome内、通常時=StatusRow へ移す。
+3. StatusRow: 通常結果と別種の行（検索中 / 結果なし / 一部の検索元が応答しない /
+   実行失敗 / キャンセル）。警告色・再試行導線・AutomationProperties.LiveSetting。
+   SearchAsync の例外（MainWindow.R4.cs:195）と実行失敗をログに加えStatusRowへ反映。
+   ContextActions中はScope Chip位置に「<対象名> › アクション」のパンくず＋初回数回の
+   Escヒント。
+4. 設定画面: Everythingカードを状態表示（接続済み/未接続＋[接続を再確認]）へ変更し
+   「案内を再表示」ボタン（SettingsWindow.xaml.cs:305）を廃止 / 一般へ
+   「Windows起動時に開始」（既存スタートアップ登録サービスを流用）と
+   外観 System・Light・Dark を追加 / 除外アプリへ[起動中のアプリから選択][exeを選択]を追加
+   （手入力は残す）/ QuickKeyBrush 等バッジ配色を Light/Dark の ThemeDictionary へ移動。
+   すべて DesignTokens.xaml 経由（直値禁止）。
+
+## 禁止・維持事項（R8プロンプトの禁止事項に加え）
+- 毎フレームHWND Resizeへ戻さない（R6方針）。段階表示でもResizeは件数確定時のみ
+- Contracts変更は原則禁止（必要が生じたら案を報告して指示を仰ぐ）
+- SPEC §3.3のデザイントークン集約 / Escは常に1段戻る（§7.1）/ クリップボード初期OFF を退行させない
+- 新規NuGet原則禁止（必要なら DEPENDENCY_MAP.md B1 手続きで先に報告）
+
+## ビルド／検証（各Stage末に1〜3、全Stage完了後に全部）
+1. dotnet build Beacon.sln -c Release 0警告0エラー
+2. dotnet test Beacon.sln -c Release 全テスト成功
+3. Test-NoUiReferences.ps1 0件（QuickKeyRegistry・ResultBatcher等のCore追加分がUI非依存）
+4. Build-Portable.ps1 → Test-Portable.ps1（既定）→ -UseActivationPipe
+5. 起動確認（Codex範囲）: 遅延プロバイダー相当の状況でも初回表示が先行すること（PERFログの
+   InputToFirstPaintMs で確認）/ 新規Data（設定なし）で "foo rf" が即動作 / アクション一覧が
+   対象別に絞られる / Welcomeが初回のみ表示 / StatusRowが結果なし・実行失敗で出る /
+   Data\Logs に ERROR なし / プロセス残留なし
+6. InputToFirstPaintMs < 50ms 目安（超過時は実測値と原因を報告。勝手にしきい値を変えない）
+
+## ユーザーが目視・手動で確認する（列挙して引き渡す）
+- 段階表示の体感（ちらつき・並び替えの暴れがないか）と旧WPF版との速度比較
+- "vs" 等の曖昧クエリの並び順が直感に沿うか（本フェーズの主目的）
+- Welcome画面・StatusRow・パンくず・バッジ（選択行のみ表示）の見た目とトーン
+- 設定画面のEverything状態表示 / 外観切替 / 除外アプリ選択導線の操作感
+- Light/Dark・DPI 100〜200%・日本語IMEで新UI（Welcome/StatusRow/バッジ配色）が破綻しないこと
+
+## 完了条件
+- R9_UX.md S1〜S7の受入条件をすべて満たす（同文書「検証済みの現状問題」表の8件が解消）
+- R4〜R8.1の完了条件（DPI・IME・レンダリング・設定保存先・Legacy移行・検索統一）に退行なし
+- Codexの責任範囲は自動検証＋起動確認まで。体感・見た目の最終判定はユーザー確認待ちとして列挙
+
+## 失敗時
+AGENTS.md「環境の既知制約」該当は固定ルールで切替。それ以外は LESSONS.md の記録基準を
+満たす場合のみ記録して再試行。R9_UX.md・SPECと矛盾する実装を勝手に進めず報告して指示を仰ぐ。
 ```

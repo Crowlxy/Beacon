@@ -4,7 +4,12 @@ using Beacon.Contracts;
 
 namespace Beacon.Core;
 
-public sealed record QuerySession(string SessionId, CancellationToken CancellationToken);
+public sealed record QuerySession(string SessionId, CancellationToken CancellationToken)
+{
+    private int _unresponsiveProviderCount;
+    public int UnresponsiveProviderCount => Volatile.Read(ref _unresponsiveProviderCount);
+    internal void MarkProviderUnresponsive() => Interlocked.Increment(ref _unresponsiveProviderCount);
+}
 
 public sealed class QueryOrchestrator(
     IEnumerable<ISearchProvider> providers,
@@ -55,7 +60,7 @@ public sealed class QueryOrchestrator(
         });
         var producers = _providers
             .Select(provider => Task.Run(
-                () => ProduceWithinDeadlineAsync(provider, request, channel.Writer, cancellation.Token),
+                () => ProduceWithinDeadlineAsync(provider, request, channel.Writer, session),
                 CancellationToken.None))
             .ToArray();
         _ = CompleteAsync(producers, channel.Writer, cancellation);
@@ -135,6 +140,7 @@ public sealed class QueryOrchestrator(
         SearchRequest request,
         ChannelWriter<SearchResultDto> writer,
         Action<string>? log,
+        Action markUnresponsive,
         CancellationToken cancellationToken)
     {
         try
@@ -154,6 +160,7 @@ public sealed class QueryOrchestrator(
         }
         catch (Exception exception)
         {
+            markUnresponsive();
             log?.Invoke($"WARN Provider {provider.ProviderId} failed: {exception.Message}");
         }
     }
@@ -162,11 +169,11 @@ public sealed class QueryOrchestrator(
         ISearchProvider provider,
         SearchRequest request,
         ChannelWriter<SearchResultDto> writer,
-        CancellationToken sessionCancellation)
+        QuerySession session)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(sessionCancellation);
-        var producer = ProduceAsync(provider, request, writer, log, deadline.Token);
-        var completed = await Task.WhenAny(producer, Task.Delay(_providerTimeout, sessionCancellation));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(session.CancellationToken);
+        var producer = ProduceAsync(provider, request, writer, log, session.MarkProviderUnresponsive, deadline.Token);
+        var completed = await Task.WhenAny(producer, Task.Delay(_providerTimeout, session.CancellationToken));
         if (completed == producer)
         {
             await producer;
@@ -174,6 +181,7 @@ public sealed class QueryOrchestrator(
         }
 
         deadline.Cancel();
+        session.MarkProviderUnresponsive();
         log?.Invoke($"WARN Provider {provider.ProviderId} exceeded {_providerTimeout.TotalMilliseconds:F0}ms deadline");
         _ = producer.ContinueWith(static task => _ = task.Exception, TaskContinuationOptions.OnlyOnFaulted);
     }
